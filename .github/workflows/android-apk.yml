@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -37,8 +40,20 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../aion-fitness.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: aion-fitness-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: aion-fitness.apk
+
+      # Publica el APK como release: se descarga desde el móvil con
+      # https://github.com/<usuario>/<repo>/releases/latest/download/aion-fitness.apk
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Aion Fitness 1.0.${{ github.run_number }}
+          body: APK de Aion Fitness generado automáticamente desde ${{ github.sha }}.
+          files: aion-fitness.apk
+          make_latest: true
