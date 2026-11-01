@@ -1,0 +1,7 @@
+{
+  "appId": "com.aionfitness.app",
+  "appName": "Aion Fitness",
+  "webDir": "dist",
+  "backgroundColor": "#09090b",
+  "android": { "backgroundColor": "#09090b" }
+}
