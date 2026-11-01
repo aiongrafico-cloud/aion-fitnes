@@ -35,12 +35,27 @@ jobs:
           npx cap sync android
 
       # Los runners de ubuntu ya traen el SDK de Android (ANDROID_HOME).
+      # Con los secretos ANDROID_KEYSTORE_BASE64 y ANDROID_KEYSTORE_PASSWORD se genera un APK release firmado;
+      # sin ellos, un APK debug para que el build no se rompa.
       - name: Compilar APK
         working-directory: android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk ../aion-fitness.apk
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/aion-release.jks"
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/aion-release.jks"
+            ./gradlew assembleRelease --no-daemon
+            cp app/build/outputs/apk/release/app-release.apk ../aion-fitness.apk
+            echo "APK_KIND=release firmado" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Sin secretos de firma: se genera un APK debug."
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk ../aion-fitness.apk
+            echo "APK_KIND=debug" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -52,8 +67,8 @@ jobs:
       - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Aion Fitness 1.0.${{ github.run_number }}
-          body: APK de Aion Fitness generado automáticamente desde ${{ github.sha }}.
+          tag_name: v1.1.${{ github.run_number }}
+          name: Aion Fitness 1.1.${{ github.run_number }}
+          body: APK (${{ env.APK_KIND }}) de Aion Fitness generado automáticamente desde ${{ github.sha }}.
           files: aion-fitness.apk
           make_latest: true

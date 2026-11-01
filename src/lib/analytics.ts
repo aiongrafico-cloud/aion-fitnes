@@ -1,7 +1,7 @@
 import { estimate1RM } from './oneRepMax'
 import { daysBetween, programWeekOf } from './date'
 import { analyzeExercise, baselineE1RM, effectiveLoad, isWorkSet, type ExerciseAnalysis } from './program'
-import type { Exercise, Profile, Session, Settings } from './types'
+import type { Exercise, Goal, MuscleGroup, Profile, Routine, Session, Settings } from './types'
 
 export interface SessionSummary {
   session: Session
@@ -133,4 +133,67 @@ export function computeKpis(
     sessionsThisWeek: summaries.filter((s) => s.week === currentWeek && s.session.date >= profile.startDate).length,
     analyses,
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Volumen semanal por grupo muscular
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Rango orientativo de series efectivas (cerca del fallo) por músculo y semana. */
+export const VOLUME_TARGET: Record<Goal, [number, number]> = {
+  hipertrofia: [6, 14],
+  fuerza: [4, 10],
+  resistencia: [6, 16],
+}
+
+export interface MuscleVolume {
+  group: MuscleGroup
+  /** Series efectivas completadas (sin aproximaciones). */
+  sets: number
+  prevSets: number
+  /** Series que la rutina programa por semana. */
+  planned: number
+  tonnage: number
+}
+
+function setsByGroup(sessions: Session[], exById: Map<string, Exercise>, profile: Profile, week: number) {
+  const out = new Map<MuscleGroup, { sets: number; tonnage: number }>()
+  for (const s of sessions) {
+    if (s.date < profile.startDate || programWeekOf(profile.startDate, s.date) !== week) continue
+    for (const entry of s.entries) {
+      const ex = exById.get(entry.exerciseId)
+      if (!ex) continue
+      const cur = out.get(ex.muscleGroup) ?? { sets: 0, tonnage: 0 }
+      for (const set of entry.sets) {
+        if (!set.done || !isWorkSet(set) || set.reps <= 0) continue
+        cur.sets += 1
+        cur.tonnage += setTonnage(ex, set.weight, set.reps, profile.bodyweight)
+      }
+      out.set(ex.muscleGroup, cur)
+    }
+  }
+  return out
+}
+
+/** Series por grupo muscular en una semana del programa, frente a la semana anterior y a lo planificado. */
+export function weeklyMuscleVolume(exercises: Exercise[], sessions: Session[], profile: Profile, routine: Routine | null | undefined, week: number): MuscleVolume[] {
+  const exById = new Map(exercises.map((e) => [e.id, e]))
+  const cur = setsByGroup(sessions, exById, profile, week)
+  const prev = setsByGroup(sessions, exById, profile, week - 1)
+  const planned = new Map<MuscleGroup, number>()
+  if (routine && routine.days.length) {
+    // La rotación se repite: días de entrenamiento por semana / días de la rutina.
+    const cycles = profile.daysPerWeek / routine.days.length
+    for (const d of routine.days) {
+      for (const it of d.items) {
+        const ex = exById.get(it.exerciseId)
+        if (ex) planned.set(ex.muscleGroup, (planned.get(ex.muscleGroup) ?? 0) + 2 * cycles)
+      }
+    }
+  }
+  const groups = new Set<MuscleGroup>([...cur.keys(), ...prev.keys(), ...planned.keys()])
+  return [...groups]
+    .map((g) => ({ group: g, sets: cur.get(g)?.sets ?? 0, prevSets: prev.get(g)?.sets ?? 0, planned: Math.round((planned.get(g) ?? 0) * 10) / 10, tonnage: cur.get(g)?.tonnage ?? 0 }))
+    .filter((r) => r.sets > 0 || r.prevSets > 0 || r.planned > 0)
+    .sort((a, b) => b.planned - a.planned || b.sets - a.sets)
 }

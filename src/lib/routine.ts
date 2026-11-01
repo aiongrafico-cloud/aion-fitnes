@@ -1,7 +1,8 @@
-import { clamp, roundToPlate, weightForReps } from './oneRepMax'
+import { clamp, estimate1RM, roundToPlate, weightForReps } from './oneRepMax'
 import { programWeekOf, todayISO } from './date'
-import { analyzeExercise, totalWeeksFor } from './program'
+import { analyzeExercise, effectiveLoad, totalWeeksFor } from './program'
 import { uid } from './storage'
+import { kg } from './format'
 import type { Exercise, MuscleGroup, Profile, Routine, RoutineItem, Session, SetLog, Settings } from './types'
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -71,11 +72,11 @@ export const DEFAULT_ROUTINE: TemplateDay[] = [
     name: 'Pierna A',
     focus: 'Cuádriceps',
     items: [
-      { name: 'Hack Squat o Sentadilla en Multipower', group: 'piernas', top: [6, 8], backoff: [8, 10], rest: 180, sample: 100, notes: 'Pies adelantados para permitir máxima flexión de rodilla sin levantar talones. Rompe la paralela con 3 s de bajada.' },
-      { name: 'Curl femoral sentado', group: 'piernas', top: [6, 8], backoff: [9, 12], rest: 120, lp: true, sample: 50, notes: 'Almohadilla superior muy firme contra los muslos para inmovilizar la pelvis. En la BS, 4 parciales en la zona de extensión (estiramiento de isquios).' },
-      { name: 'Extensiones de cuádriceps en máquina', group: 'piernas', top: [8, 10], backoff: [10, 12], rest: 90, lp: true, sample: 55, notes: 'Pausa de 1 s arriba. Al fallar la BS, 5 parciales saliendo desde abajo hasta la mitad del recorrido.' },
-      { name: 'Peso muerto rumano', group: 'piernas', top: [6, 8], backoff: [8, 10], rest: 150, sample: 90, notes: 'Con mancuernas o barra. Flexión fija de rodillas; lleva la cadera atrás hasta máxima tensión de isquios sin perder la neutralidad lumbar.' },
-      { name: 'Elevación de talones de pie en máquina', group: 'piernas', top: [8, 10], backoff: [10, 12], rest: 90, sample: 80, notes: 'Pausa obligatoria de 2–3 s abajo en máximo estiramiento para disipar la elasticidad del tendón de Aquiles antes de subir.' },
+      { name: 'Hack Squat o Sentadilla en Multipower', group: 'cuadriceps', top: [6, 8], backoff: [8, 10], rest: 180, sample: 100, notes: 'Pies adelantados para permitir máxima flexión de rodilla sin levantar talones. Rompe la paralela con 3 s de bajada.' },
+      { name: 'Curl femoral sentado', group: 'isquios', top: [6, 8], backoff: [9, 12], rest: 120, lp: true, sample: 50, notes: 'Almohadilla superior muy firme contra los muslos para inmovilizar la pelvis. En la BS, 4 parciales en la zona de extensión (estiramiento de isquios).' },
+      { name: 'Extensiones de cuádriceps en máquina', group: 'cuadriceps', top: [8, 10], backoff: [10, 12], rest: 90, lp: true, sample: 55, notes: 'Pausa de 1 s arriba. Al fallar la BS, 5 parciales saliendo desde abajo hasta la mitad del recorrido.' },
+      { name: 'Peso muerto rumano', group: 'isquios', top: [6, 8], backoff: [8, 10], rest: 150, sample: 90, notes: 'Con mancuernas o barra. Flexión fija de rodillas; lleva la cadera atrás hasta máxima tensión de isquios sin perder la neutralidad lumbar.' },
+      { name: 'Elevación de talones de pie en máquina', group: 'gemelos', top: [8, 10], backoff: [10, 12], rest: 90, sample: 80, notes: 'Pausa obligatoria de 2–3 s abajo en máximo estiramiento para disipar la elasticidad del tendón de Aquiles antes de subir.' },
     ],
   },
   {
@@ -94,11 +95,11 @@ export const DEFAULT_ROUTINE: TemplateDay[] = [
     name: 'Pierna B',
     focus: 'Cadena posterior y glúteo',
     items: [
-      { name: 'Prensa de piernas', group: 'piernas', top: [8, 10], backoff: [10, 12], rest: 180, sample: 180, notes: 'Plataforma media/alta. Recorrido amplio y fluido sin que la pelvis se despegue del respaldo abajo.' },
+      { name: 'Prensa de piernas', group: 'cuadriceps', top: [8, 10], backoff: [10, 12], rest: 180, sample: 180, notes: 'Plataforma media/alta. Recorrido amplio y fluido sin que la pelvis se despegue del respaldo abajo.' },
       { name: 'Sentadilla búlgara en Multipower', group: 'gluteos', unilateral: true, top: [6, 8], backoff: [8, 10], rest: 120, sample: 40, notes: 'Por pierna; 2 min entre piernas. Torso ligeramente inclinado adelante para dirigir la tensión al glúteo mayor y vasto lateral.' },
-      { name: 'Curl femoral acostado', group: 'piernas', top: [8, 10], backoff: [10, 12], rest: 120, lp: true, sample: 40, notes: 'Cadera clavada al banco. Al fallar la segunda serie, 4 parciales en la posición de máxima extensión.' },
-      { name: 'Aductores en máquina', group: 'piernas', top: [10, 12], backoff: [12, 15], rest: 90, lp: true, sample: 60, notes: 'Apertura amplia controlada en 3 s y pausa de 1 s en el estiramiento.' },
-      { name: 'Elevación de talones sentado (sóleo)', group: 'piernas', top: [10, 12], backoff: [12, 15], rest: 90, sample: 50, notes: 'Rodillas a 90°. Pausa estricta de 2 s en el fondo antes de cada elevación.' },
+      { name: 'Curl femoral acostado', group: 'isquios', top: [8, 10], backoff: [10, 12], rest: 120, lp: true, sample: 40, notes: 'Cadera clavada al banco. Al fallar la segunda serie, 4 parciales en la posición de máxima extensión.' },
+      { name: 'Aductores en máquina', group: 'aductores', top: [10, 12], backoff: [12, 15], rest: 90, lp: true, sample: 60, notes: 'Apertura amplia controlada en 3 s y pausa de 1 s en el estiramiento.' },
+      { name: 'Elevación de talones sentado (sóleo)', group: 'gemelos', top: [10, 12], backoff: [12, 15], rest: 90, sample: 50, notes: 'Rodillas a 90°. Pausa estricta de 2 s en el fondo antes de cada elevación.' },
     ],
   },
 ]
@@ -167,6 +168,8 @@ export interface ProtocolPlan {
   backoff: { weight: number; reps: [number, number]; target: number; rpe: number } | null
   partials: number
   restSeconds: number
+  /** Ajuste por doble progresión respecto a lo que pedía la curva. */
+  adjust?: ProgressionAlert
 }
 
 /** Series de aproximación: 2 si la carga es ligera, 3 si es pesada. */
@@ -180,10 +183,10 @@ export function warmupSets(topWeight: number, rounding: number): { weight: numbe
 }
 
 /** Prescripción pura del protocolo para un 1RM objetivo. El Top Set apunta al centro del rango a RIR ~0,5. */
-export function protocolFor(targetE1RM: number, item: RoutineItem, settings: Settings, deload: boolean, week = 0, calibrate = false): ProtocolPlan {
+export function protocolFor(targetE1RM: number, item: RoutineItem, settings: Settings, deload: boolean, week = 0, calibrate = false, topOverride?: number): ProtocolPlan {
   const topTarget = deload ? item.top[0] : Math.round((item.top[0] + item.top[1]) / 2)
   const topRpe = deload ? PROTOCOL.deloadTopRpe : PROTOCOL.topRpe
-  const topWeight = calibrate ? 0 : Math.max(0, roundToPlate(weightForReps(targetE1RM, topTarget, topRpe, settings.formula), settings.rounding))
+  const topWeight = calibrate ? 0 : topOverride ?? Math.max(0, roundToPlate(weightForReps(targetE1RM, topTarget, topRpe, settings.formula), settings.rounding))
   const boWeight = calibrate ? 0 : Math.max(0, roundToPlate(topWeight * (1 - PROTOCOL.backoffDrop), settings.rounding))
   const boTarget = Math.round((item.backoff[0] + item.backoff[1]) / 2)
   return {
@@ -205,7 +208,118 @@ export function protocolForDate(ex: Exercise, item: RoutineItem, profile: Profil
   const week = clamp(programWeekOf(profile.startDate, date), 1, W)
   if (!isCalibrated(ex)) return protocolFor(0, item, settings, false, week, true)
   const a = analyzeExercise(ex, profile, sessions, settings, { untilWeek: week - 1, today: date })
-  return protocolFor(a.plan[week].targetE1RM, item, settings, a.plan[week].deload, week)
+  const { targetE1RM, deload } = a.plan[week]
+  const plan = protocolFor(targetE1RM, item, settings, deload, week)
+  if (deload) return plan
+  // Doble progresión: si el último Top Set superó el rango se sube como mínimo un escalón;
+  // si se quedó corto, no se pide más peso que el que corresponde a su 1RM real.
+  const alert = progressionAlert(ex, item, sessions, profile, settings, date)
+  if (alert?.kind === 'subir' && alert.to != null && plan.top.weight < alert.to) return { ...protocolFor(targetE1RM, item, settings, false, week, false, alert.to), adjust: alert }
+  if (alert?.kind === 'bajar' && alert.to != null && plan.top.weight > alert.to) return { ...protocolFor(targetE1RM, item, settings, false, week, false, alert.to), adjust: alert }
+  return plan
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Alertas de progresión del Top Set (doble progresión)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface TopSetRecord {
+  date: string
+  weight: number
+  reps: number
+  rpe?: number
+  e1rm: number
+  /** Top Set de descarga (RPE ≤ 7,5): no cuenta para decidir subidas. */
+  deload: boolean
+}
+
+export type ProgressionKind = 'subir' | 'bajar' | 'estancado' | 'enRango'
+
+export interface ProgressionAlert {
+  kind: ProgressionKind
+  exerciseId: string
+  title: string
+  message: string
+  last: TopSetRecord
+  /** Peso sugerido para el próximo Top Set. */
+  to?: number
+}
+
+/** Top Sets completados de un ejercicio hasta una fecha (incluida), en orden cronológico. */
+export function topSetHistory(ex: Exercise, sessions: Session[], profile: Profile, settings: Settings, until = '9999-12-31'): TopSetRecord[] {
+  const out: TopSetRecord[] = []
+  const sorted = [...sessions].filter((s) => s.date <= until).sort((a, b) => (a.date === b.date ? a.createdAt.localeCompare(b.createdAt) : a.date.localeCompare(b.date)))
+  for (const s of sorted) {
+    const entry = s.entries.find((e) => e.exerciseId === ex.id)
+    const top = entry?.sets.find((st) => st.kind === 'top' && st.done && st.reps > 0)
+    if (!top) continue
+    const e1rm = estimate1RM(effectiveLoad(ex, top.weight, profile.bodyweight), top.reps, top.rpe, settings.formula)
+    out.push({ date: s.date, weight: top.weight, reps: top.reps, rpe: top.rpe, e1rm, deload: top.rpe != null && top.rpe <= 7.5 })
+  }
+  return out
+}
+
+/** Escalón de subida: 2,5 % de la carga, como mínimo el incremento de discos. */
+export function progressionStep(weight: number, rounding: number): number {
+  return Math.max(rounding, roundToPlate(weight * 0.025, rounding))
+}
+
+/**
+ * Evalúa el último Top Set frente al rango de la rutina:
+ * - tope del rango alcanzado → subir un escalón
+ * - por debajo del rango → bajar al peso que su 1RM permite en el centro del rango
+ * - 3 sesiones seguidas sin mejorar el 1RM → estancamiento
+ */
+export function progressionAlert(ex: Exercise, item: RoutineItem, sessions: Session[], profile: Profile, settings: Settings, until = '9999-12-31'): ProgressionAlert | null {
+  if (!isCalibrated(ex)) return null
+  const hist = topSetHistory(ex, sessions, profile, settings, until).filter((h) => !h.deload)
+  const last = hist[hist.length - 1]
+  if (!last) return null
+  const [lo, hi] = item.top
+  if (last.reps >= hi) {
+    const to = last.weight + progressionStep(last.weight, settings.rounding)
+    return {
+      kind: 'subir',
+      exerciseId: ex.id,
+      last,
+      to,
+      title: 'Sube el Top Set',
+      message: `${last.reps} reps con ${kg(last.weight)}: tocaste el tope del rango (${lo}–${hi}). Próximo Top Set con ${kg(to)}.`,
+    }
+  }
+  if (last.reps < lo) {
+    const mid = Math.round((lo + hi) / 2)
+    const fit = roundToPlate(weightForReps(last.e1rm, mid, PROTOCOL.topRpe, settings.formula) - (ex.bodyweight ? profile.bodyweight : 0), settings.rounding)
+    const to = Math.max(0, Math.min(fit, last.weight - settings.rounding))
+    return {
+      kind: 'bajar',
+      exerciseId: ex.id,
+      last,
+      to,
+      title: 'Ajusta la carga',
+      message: `${last.reps} reps con ${kg(last.weight)}: por debajo del rango (${lo}–${hi}). Próximo Top Set con ${kg(to)} para volver al rango.`,
+    }
+  }
+  if (hist.length >= 4) {
+    const recent = hist.slice(-3)
+    const before = Math.max(...hist.slice(0, -3).map((h) => h.e1rm))
+    if (Math.max(...recent.map((h) => h.e1rm)) <= before * 1.005) {
+      return {
+        kind: 'estancado',
+        exerciseId: ex.id,
+        last,
+        title: 'Estancado',
+        message: `3 sesiones sin superar tu mejor 1RM (${kg(before)}). Revisa descanso y técnica, o adelanta una descarga.`,
+      }
+    }
+  }
+  return {
+    kind: 'enRango',
+    exerciseId: ex.id,
+    last,
+    title: 'En rango',
+    message: `${last.reps} reps con ${kg(last.weight)}. Sigue con ese peso hasta llegar a ${hi} reps.`,
+  }
 }
 
 /** Series precargadas en el logger para un ejercicio de la rutina. */

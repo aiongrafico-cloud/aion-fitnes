@@ -3,9 +3,9 @@ import { defaultState, loadState, saveState, uid } from '../lib/storage'
 import { todayISO } from '../lib/date'
 import { analyzeExercise, effectiveLoad, initialWorkingLoad, isWorkSet, suggestedIncrement, GOALS } from '../lib/program'
 import { estimate1RM, roundToPlate } from '../lib/oneRepMax'
-import { buildDefaultRoutine, PROTOCOL } from '../lib/routine'
+import { buildDefaultRoutine, DEFAULT_ROUTINE, PROTOCOL } from '../lib/routine'
 import { programWeekOf } from '../lib/date'
-import type { AppState, Exercise, ExerciseLog, Profile, Routine, RoutineItem, Session, SetLog, Settings } from '../lib/types'
+import type { AppState, BodyEntry, Exercise, ExerciseLog, Profile, Routine, RoutineItem, Session, SetLog, Settings } from '../lib/types'
 
 type Action =
   | { type: 'completeOnboarding'; profile: Profile; exercises: Exercise[]; routine: Routine | null }
@@ -31,6 +31,8 @@ type Action =
   | { type: 'addRoutineItem'; dayId: string; item: RoutineItem }
   | { type: 'moveRoutineItem'; dayId: string; itemId: string; dir: -1 | 1 }
   | { type: 'resetRoutine' }
+  | { type: 'saveBodyEntry'; entry: BodyEntry }
+  | { type: 'deleteBodyEntry'; id: string }
   | { type: 'replace'; state: AppState }
   | { type: 'reset' }
 
@@ -45,7 +47,15 @@ function mapDraftEntry(state: AppState, exerciseId: string, fn: (e: ExerciseLog)
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'completeOnboarding':
-      return { ...state, profile: action.profile, exercises: action.exercises, routine: action.routine, sessions: [], draft: null }
+      return {
+        ...state,
+        profile: action.profile,
+        exercises: action.exercises,
+        routine: action.routine,
+        sessions: [],
+        draft: null,
+        body: [{ id: uid(), date: action.profile.startDate, weight: action.profile.bodyweight }],
+      }
     case 'updateProfile':
       return state.profile ? { ...state, profile: { ...state.profile, ...action.profile } } : state
     case 'updateSettings':
@@ -157,6 +167,16 @@ function reducer(state: AppState, action: Action): AppState {
       const built = buildDefaultRoutine(state.exercises, week)
       return { ...state, exercises: [...state.exercises, ...built.exercises].map((e) => (built.routine.days.some((d) => d.items.some((i) => i.exerciseId === e.id)) ? { ...e, archived: false } : e)), routine: built.routine }
     }
+    case 'saveBodyEntry': {
+      // Un registro por día: guardar en una fecha existente la sustituye.
+      const body = [...(state.body ?? []).filter((b) => b.date !== action.entry.date && b.id !== action.entry.id), action.entry]
+      const latestWeight = body.filter((b) => b.weight != null).sort((a, b) => a.date.localeCompare(b.date)).pop()
+      // El peso más reciente actualiza el perfil (afecta a los ejercicios con peso corporal).
+      const profile = state.profile && latestWeight?.weight ? { ...state.profile, bodyweight: latestWeight.weight } : state.profile
+      return { ...state, body, profile }
+    }
+    case 'deleteBodyEntry':
+      return { ...state, body: (state.body ?? []).filter((b) => b.id !== action.id) }
     case 'replace':
       return ensureRoutine(action.state)
     case 'reset':
@@ -202,11 +222,25 @@ function calibrateFrom(state: AppState, session: Session): Exercise[] {
 }
 
 /** Datos anteriores a la rutina: se añade la rutina predeterminada sin tocar ejercicios ni sesiones existentes. */
-export function ensureRoutine(state: AppState): AppState {
+export function ensureRoutine(input: AppState): AppState {
+  const state = migrate(input)
   if (!state.profile || state.routine) return { ...state, routine: state.routine ?? null }
   const week = Math.max(0, programWeekOf(state.profile.startDate, todayISO()) - 1)
   const built = buildDefaultRoutine(state.exercises, week)
   return { ...state, exercises: [...state.exercises, ...built.exercises], routine: built.routine }
+}
+
+/** Migraciones de datos guardados con versiones anteriores de la app. */
+function migrate(state: AppState): AppState {
+  // Grupos musculares de pierna más finos para el volumen semanal.
+  const groupByName = new Map(DEFAULT_ROUTINE.flatMap((d) => d.items).map((t) => [t.name.toLowerCase(), t.group]))
+  const exercises = state.exercises.map((e) => {
+    const g = groupByName.get(e.name.toLowerCase())
+    return e.muscleGroup === 'piernas' && g && g !== 'piernas' ? { ...e, muscleGroup: g } : e
+  })
+  // Registro corporal: se inicia con el peso del perfil.
+  const body = state.body ?? (state.profile ? [{ id: uid(), date: state.profile.startDate, weight: state.profile.bodyweight }] : [])
+  return { ...state, exercises, body }
 }
 
 interface Store {

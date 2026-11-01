@@ -1,19 +1,23 @@
 import { motion } from 'framer-motion'
-import { Activity, ClipboardList, Dumbbell, History, LayoutDashboard, LineChart, Settings } from 'lucide-react'
+import { Activity, ClipboardList, Dumbbell, History, LayoutDashboard, LineChart, Scale, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cx } from '../ui'
 
-export type Tab = 'panel' | 'entrenar' | 'rutina' | 'progreso' | 'ejercicios' | 'historial' | 'ajustes'
+export type Tab = 'panel' | 'entrenar' | 'rutina' | 'progreso' | 'cuerpo' | 'ejercicios' | 'historial' | 'ajustes'
 
 export const TABS: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: 'panel', label: 'Panel', icon: LayoutDashboard },
   { id: 'entrenar', label: 'Entrenar', icon: Activity },
   { id: 'rutina', label: 'Rutina', icon: ClipboardList },
   { id: 'progreso', label: 'Progreso', icon: LineChart },
+  { id: 'cuerpo', label: 'Cuerpo', icon: Scale },
   { id: 'ejercicios', label: 'Ejercicios', icon: Dumbbell },
   { id: 'historial', label: 'Historial', icon: History },
   { id: 'ajustes', label: 'Ajustes', icon: Settings },
 ]
+
+/** En móvil van en la cabecera; el resto en la barra inferior. */
+const HEADER_TABS: Tab[] = ['ejercicios', 'historial', 'ajustes']
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -71,6 +75,9 @@ export function Shell({ tab, onTab, children, hasDraft, name }: { tab: Tab; onTa
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.05] bg-ink-950/70 px-4 py-3 backdrop-blur-xl lg:hidden">
         <Logo />
         <div className="flex gap-1">
+          <button onClick={() => onTab('ejercicios')} aria-label="Ejercicios" className={cx('grid h-9 w-9 place-items-center rounded-xl hover:bg-white/[0.05]', tab === 'ejercicios' ? 'text-emerald-400' : 'text-zinc-400')}>
+            <Dumbbell size={18} />
+          </button>
           <button onClick={() => onTab('historial')} aria-label="Historial" className={cx('grid h-9 w-9 place-items-center rounded-xl hover:bg-white/[0.05]', tab === 'historial' ? 'text-emerald-400' : 'text-zinc-400')}>
             <History size={18} />
           </button>
@@ -85,7 +92,7 @@ export function Shell({ tab, onTab, children, hasDraft, name }: { tab: Tab; onTa
       {/* Navegación inferior móvil */}
       <nav className="fixed inset-x-3 bottom-3 z-40 lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="glass-strong flex items-center justify-between px-1.5 py-1.5">
-          {TABS.filter((t) => t.id !== 'ajustes' && t.id !== 'historial').map((t) => {
+          {TABS.filter((t) => !HEADER_TABS.includes(t.id)).map((t) => {
             const active = tab === t.id
             const Icon = t.icon
             return (

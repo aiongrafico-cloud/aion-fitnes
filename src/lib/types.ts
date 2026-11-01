@@ -13,6 +13,10 @@ export type MuscleGroup =
   | 'triceps'
   | 'core'
   | 'cuerpo completo'
+  | 'cuadriceps'
+  | 'isquios'
+  | 'gemelos'
+  | 'aductores'
 
 export interface Profile {
   name: string
@@ -111,6 +115,19 @@ export interface Settings {
   restSeconds: number
 }
 
+/** Registro corporal: peso y medidas opcionales (cm, %). */
+export interface BodyEntry {
+  id: string
+  date: string // YYYY-MM-DD (uno por día)
+  weight?: number
+  bodyFat?: number
+  waist?: number
+  chest?: number
+  arm?: number
+  thigh?: number
+  hips?: number
+}
+
 export interface AppState {
   version: 1
   profile: Profile | null
@@ -119,4 +136,5 @@ export interface AppState {
   draft: Session | null
   settings: Settings
   routine?: Routine | null
+  body?: BodyEntry[]
 }

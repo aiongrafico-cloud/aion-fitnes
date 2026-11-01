@@ -19,7 +19,7 @@ export function SettingsView() {
   const [msg, setMsg] = useState<string | null>(null)
 
   const exportData = async () => {
-    const state: AppState = { version: 1, profile, exercises: athlete.exercises, sessions: athlete.sessions, draft: athlete.draft, settings }
+    const state: AppState = { version: 1, profile, exercises: athlete.exercises, sessions: athlete.sessions, draft: athlete.draft, settings, routine: athlete.routine, body: athlete.body }
     const json = JSON.stringify(state, null, 2)
     const fileName = `aion-fitness-${todayISO()}.json`
     // En la app de Android no hay descargas de navegador: se guarda el archivo y se abre el menú Compartir.

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
-import { Check, ChevronDown, Clock, Dumbbell, Flag, Info, Plus, Timer, Trash2, Trophy, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clock, Dumbbell, Flag, Info, Plus, Timer, Trash2, Trophy, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, EmptyState, Modal, Stepper, cx } from '../../components/ui'
 import { useConfirm } from '../../components/ui/confirm'
@@ -8,7 +8,7 @@ import type { Tab } from '../../components/layout/Shell'
 import { useAthlete } from '../../store/AppStore'
 import { estimate1RM, roundToPlate } from '../../lib/oneRepMax'
 import { analyzeExercise, effectiveLoad, isWorkSet, todaysPrescription, type WeekPlan } from '../../lib/program'
-import { findRoutineItem, isCalibrated, nextDayIndex, protocolForDate, PROTOCOL, setsFromProtocol, warmupSets, type ProtocolPlan } from '../../lib/routine'
+import { findRoutineItem, isCalibrated, nextDayIndex, progressionStep, protocolForDate, PROTOCOL, setsFromProtocol, warmupSets, type ProtocolPlan } from '../../lib/routine'
 import { setTonnage, summarizeSessions } from '../../lib/analytics'
 import { formatLong, programWeekOf, todayISO } from '../../lib/date'
 import { muscleLabel } from '../../lib/catalog'
@@ -325,6 +325,16 @@ export function ProtocolRow({ ex, item, plan }: { ex: Exercise; item: RoutineIte
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm font-medium text-zinc-100">{ex.name}</span>
         <div className="flex shrink-0 gap-1">
+          {plan.adjust?.kind === 'subir' && (
+            <Badge tone="emerald">
+              <ArrowUp size={11} /> Sube
+            </Badge>
+          )}
+          {plan.adjust?.kind === 'bajar' && (
+            <Badge tone="amber">
+              <ArrowDown size={11} /> Ajuste
+            </Badge>
+          )}
           {plan.deload && <Badge tone="violet">Descarga</Badge>}
           {item.partials && !plan.deload && <Badge tone="emerald">+LP</Badge>}
         </div>
@@ -431,6 +441,12 @@ function EntryCard({
                   TS {kg(proto.top.weight)} × {item!.top[0]}–{item!.top[1]} @ RIR {proto.deload ? 3 : '1–0'}
                   {proto.backoff && ` · BS ${kg(proto.backoff.weight)} × ${item!.backoff[0]}–${item!.backoff[1]} al fallo`}
                   {` · descanso ${restLabel(item!.restSeconds)}`}
+                  {proto.adjust && (
+                    <span className={cx('mt-1 flex items-start gap-1', proto.adjust.kind === 'subir' ? 'text-emerald-300/90' : 'text-amber-300/90')}>
+                      {proto.adjust.kind === 'subir' ? <ArrowUp size={12} className="mt-px shrink-0" /> : <ArrowDown size={12} className="mt-px shrink-0" />}
+                      {proto.adjust.message}
+                    </span>
+                  )}
                 </>
               )
             ) : (
@@ -564,6 +580,21 @@ function EntryCard({
                       </AnimatePresence>
                     </motion.button>
                   </div>
+                  {s.kind === 'top' && s.done && item && !proto?.deload && !proto?.calibrate && (s.reps >= item.top[1] || s.reps < item.top[0]) && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={cx(
+                        'mt-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
+                        s.reps >= item.top[1] ? 'border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-200' : 'border-amber-500/20 bg-amber-500/[0.07] text-amber-200',
+                      )}
+                    >
+                      {s.reps >= item.top[1] ? <ArrowUp size={14} className="mt-px shrink-0" /> : <ArrowDown size={14} className="mt-px shrink-0" />}
+                      {s.reps >= item.top[1]
+                        ? `Tope del rango (${item.top[0]}–${item.top[1]}). La próxima sesión el Top Set sube a ${kg(s.weight + progressionStep(s.weight, rounding))}.`
+                        : `Por debajo del rango (${item.top[0]}–${item.top[1]}). La próxima sesión bajará la carga para volver al rango.`}
+                    </motion.div>
+                  )}
                   {s.kind === 'backoff' && item?.partials && !proto?.deload && (
                     <div className="mt-4 flex items-center justify-end gap-2 pr-0.5 text-xs text-zinc-400">
                       <span>

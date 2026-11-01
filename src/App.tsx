@@ -10,6 +10,7 @@ import { Exercises } from './features/exercises/Exercises'
 import { HistoryView } from './features/history/History'
 import { SettingsView } from './features/settings/Settings'
 import { RoutineView } from './features/routine/RoutineView'
+import { BodyView } from './features/body/BodyView'
 
 function readHash(): Tab {
   const h = window.location.hash.replace('#', '') as Tab
@@ -64,6 +65,7 @@ export default function App() {
             />
           )}
           {tab === 'progreso' && <Progress focusId={focusExercise} onFocus={setFocusExercise} />}
+          {tab === 'cuerpo' && <BodyView />}
           {tab === 'ejercicios' && <Exercises go={go} />}
           {tab === 'historial' && <HistoryView />}
           {tab === 'ajustes' && <SettingsView />}

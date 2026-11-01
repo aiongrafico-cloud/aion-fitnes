@@ -33,6 +33,10 @@ export const TEMPLATES: ExerciseTemplate[] = [
 export const MUSCLE_GROUPS: { id: MuscleGroup; label: string }[] = [
   { id: 'pecho', label: 'Pecho' },
   { id: 'espalda', label: 'Espalda' },
+  { id: 'cuadriceps', label: 'Cuádriceps' },
+  { id: 'isquios', label: 'Isquios' },
+  { id: 'gemelos', label: 'Gemelos' },
+  { id: 'aductores', label: 'Aductores' },
   { id: 'piernas', label: 'Piernas' },
   { id: 'gluteos', label: 'Glúteos' },
   { id: 'hombros', label: 'Hombros' },

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { brzycki, epley, estimate1RM, weightForReps, roundToPlate } from './oneRepMax'
 import { analyzeExercise, fitResponse, growthSchedule, isDeloadWeek, prescribe, projectCurve, todaysPrescription } from './program'
-import { summarizeSessions } from './analytics'
+import { summarizeSessions, weeklyMuscleVolume } from './analytics'
+import { metricChange, trailingAverage } from './body'
 import { buildDemoState } from './demo'
 import { addDays, programWeekOf } from './date'
 import { defaultState } from './storage'
 import type { Exercise, Profile, RoutineItem, Session } from './types'
-import { buildDefaultRoutine, nextDayIndex, protocolFor, protocolForDate } from './routine'
+import { buildDefaultRoutine, nextDayIndex, progressionAlert, protocolFor, protocolForDate } from './routine'
 
 const settings = defaultState.settings
 const profile: Profile = {
@@ -166,5 +167,52 @@ describe('rutina Top Set + Back-off', () => {
     const sum = summarizeSessions([sess], [bench], profile, settings)
     expect(sum[0].tonnage).toBe(500)
     expect(sum[0].bestByExercise.get('b')).toBeCloseTo(estimate1RM(100, 5, 10), 6)
+  })
+})
+
+describe('Mejoras: progresión, volumen y cuerpo', () => {
+  const it8: RoutineItem = { id: 'r', exerciseId: 'b', top: [6, 8], backoff: [8, 10], restSeconds: 180, partials: false, notes: '' }
+  const topSession = (date: string, weight: number, reps: number, rpe = 9.5): Session => ({
+    id: date, date, createdAt: date, entries: [{ exerciseId: 'b', sets: [{ id: date, weight, reps, rpe, done: true, kind: 'top' }, { id: date + 'b', weight: weight * 0.875, reps: 9, rpe: 10, done: true, kind: 'backoff' }] }],
+  })
+
+  it('tocar el tope del rango sube el Top Set un escalón y la prescripción lo respeta', () => {
+    const sessions = [topSession('2026-01-06', 100, 8)]
+    const a = progressionAlert(bench, it8, sessions, profile, settings)!
+    expect(a.kind).toBe('subir')
+    expect(a.to).toBe(102.5)
+    const p = protocolForDate(bench, it8, profile, sessions, settings, '2026-01-13')
+    expect(p.top.weight).toBeGreaterThanOrEqual(102.5)
+  })
+  it('quedarse por debajo del rango baja la carga', () => {
+    const a = progressionAlert(bench, it8, [topSession('2026-01-06', 100, 4)], profile, settings)!
+    expect(a.kind).toBe('bajar')
+    expect(a.to!).toBeLessThan(100)
+  })
+  it('tres sesiones sin mejorar el 1RM marcan estancamiento; las descargas no cuentan', () => {
+    const sessions = [topSession('2026-01-06', 100, 7), topSession('2026-01-13', 100, 7), topSession('2026-01-16', 70, 6, 7), topSession('2026-01-20', 100, 6), topSession('2026-01-27', 100, 7)]
+    expect(progressionAlert(bench, it8, sessions, profile, settings)!.kind).toBe('estancado')
+    expect(progressionAlert(bench, it8, sessions.slice(0, 2), profile, settings)!.kind).toBe('enRango')
+  })
+  it('el volumen por músculo cuenta series efectivas de la semana y el plan de la rutina', () => {
+    const sessions = [topSession('2026-01-06', 100, 7)]
+    const routine = { name: 'x', days: [{ id: 'd', name: 'A', focus: '', items: [it8] }] }
+    const v = weeklyMuscleVolume([bench], sessions, profile, routine, 1)
+    expect(v[0].group).toBe('pecho')
+    expect(v[0].sets).toBe(2)
+    expect(v[0].planned).toBe(8) // 2 series × 4 días / 1 día de rutina
+    expect(weeklyMuscleVolume([bench], sessions, profile, routine, 2)[0].prevSets).toBe(2)
+  })
+  it('el ritmo semanal de peso sale de la regresión de las últimas 4 semanas', () => {
+    const body = Array.from({ length: 8 }, (_, i) => ({ id: String(i), date: addDays('2026-01-01', i * 4), weight: 80 + i * 4 * (0.3 / 7) }))
+    const c = metricChange(body, 'weight')!
+    expect(c.weeklyRate!).toBeCloseTo(0.3, 6)
+    expect(c.total).toBeCloseTo(1.2, 6)
+    expect(trailingAverage([{ date: '2026-01-01', value: 80 }, { date: '2026-01-03', value: 82 }, { date: '2026-01-20', value: 90 }])).toEqual([80, 81, 90])
+  })
+  it('la demo incluye registros corporales válidos', () => {
+    const d = buildDemoState('2026-03-01')
+    expect(d.body!.length).toBeGreaterThan(10)
+    expect(d.profile!.bodyweight).toBe(d.body![d.body!.length - 1].weight)
   })
 })

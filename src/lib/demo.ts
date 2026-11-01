@@ -3,7 +3,7 @@ import { clamp } from './oneRepMax'
 import { baselineE1RM, growthSchedule, suggestedIncrement } from './program'
 import { buildDefaultRoutine, protocolForDate, PROTOCOL } from './routine'
 import { defaultState, uid } from './storage'
-import type { AppState, Profile, Session, SetLog } from './types'
+import type { AppState, BodyEntry, Profile, Session, SetLog } from './types'
 
 /**
  * Atleta de ejemplo con ~5 semanas de la rutina Torso/Pierna (Top Set + Back-off).
@@ -74,5 +74,21 @@ export function buildDemoState(today = todayISO()): AppState {
     }
   }
 
-  return { ...defaultState, profile, exercises, sessions, routine }
+  // Pesajes en ayunas ~3 veces por semana: volumen limpio (+0,2 kg/sem) con ruido de retención de líquidos.
+  const body: BodyEntry[] = []
+  for (let d = 0; d <= 36; d += 2 + (d % 3 === 0 ? 1 : 0)) {
+    const date = addDays(startDate, d)
+    if (date > today) break
+    const weight = Math.round((profile.bodyweight + (0.2 * d) / 7 + (rand() - 0.5) * 0.9) * 10) / 10
+    const entry: BodyEntry = { id: uid(), date, weight }
+    if (d % 14 === 0) {
+      entry.waist = Math.round((82 + (0.1 * d) / 7) * 2) / 2
+      entry.arm = Math.round((37 + (0.12 * d) / 7) * 2) / 2
+      entry.chest = Math.round((102 + (0.15 * d) / 7) * 2) / 2
+    }
+    body.push(entry)
+  }
+  const lastWeight = body[body.length - 1]?.weight ?? profile.bodyweight
+
+  return { ...defaultState, profile: { ...profile, bodyweight: lastWeight }, exercises, sessions, routine, body }
 }

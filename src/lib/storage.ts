@@ -8,7 +8,7 @@ const baselineSchema = z.object({ weight: z.number().min(0), reps: z.number().in
 const exerciseSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
-  muscleGroup: z.enum(['pecho', 'espalda', 'piernas', 'gluteos', 'hombros', 'biceps', 'triceps', 'core', 'cuerpo completo']),
+  muscleGroup: z.enum(['pecho', 'espalda', 'piernas', 'gluteos', 'hombros', 'biceps', 'triceps', 'core', 'cuerpo completo', 'cuadriceps', 'isquios', 'gemelos', 'aductores']),
   bodyweight: z.boolean(),
   baseline: baselineSchema,
   weeklyIncrement: z.number().min(0),
@@ -75,6 +75,20 @@ const profileSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 })
 
+const measure = z.number().min(0).max(400).optional()
+
+const bodySchema = z.object({
+  id: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  weight: z.number().min(25).max(300).optional(),
+  bodyFat: z.number().min(2).max(70).optional(),
+  waist: measure,
+  chest: measure,
+  arm: measure,
+  thigh: measure,
+  hips: measure,
+})
+
 export const appStateSchema = z.object({
   version: z.literal(1),
   profile: profileSchema.nullable(),
@@ -87,6 +101,7 @@ export const appStateSchema = z.object({
     restSeconds: z.number().int().min(15).max(600),
   }),
   routine: routineSchema.nullable().optional(),
+  body: z.array(bodySchema).optional(),
 })
 
 export const defaultState: AppState = {
@@ -97,6 +112,7 @@ export const defaultState: AppState = {
   draft: null,
   settings: { formula: 'promedio', rounding: 2.5, restSeconds: 120 },
   routine: null,
+  body: [],
 }
 
 export function parseState(raw: unknown): AppState | null {
