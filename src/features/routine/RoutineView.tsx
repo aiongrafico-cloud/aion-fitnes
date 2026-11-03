@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion'
-import { ArrowDown, ArrowUp, Pencil, Play, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Pencil, Play, PlayCircle, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, Button, Card, EmptyState, Field, Modal, Segmented, Stepper, cx } from '../../components/ui'
 import { useConfirm } from '../../components/ui/confirm'
+import { TechniquePanel, hasTechnique } from '../../components/motion/TechniquePanel'
+import { AnimatePresence } from 'framer-motion'
 import type { Tab } from '../../components/layout/Shell'
 import { useAthlete } from '../../store/AppStore'
 import { isStraight, nextDayIndex, PROTOCOL_STEPS, protocolForDate, rirLabel } from '../../lib/routine'
@@ -18,6 +20,7 @@ export function RoutineView({ go, onTrainDay }: { go: (t: Tab) => void; onTrainD
   const [dayIdx, setDayIdx] = useState(suggested)
   const [editing, setEditing] = useState<RoutineItem | null>(null)
   const [adding, setAdding] = useState(false)
+  const [open, setOpen] = useState<string | null>(null)
 
   if (!routine || routine.days.length === 0) {
     return (
@@ -178,7 +181,21 @@ export function RoutineView({ go, onTrainDay }: { go: (t: Tab) => void; onTrainD
                     </div>
                   </div>
                   )}
-                  {it.notes && <p className="mt-3 text-[13px] leading-relaxed text-zinc-400">{it.notes}</p>}
+                  {hasTechnique(ex.name, it.notes) && (
+                    <button
+                      onClick={() => setOpen((o) => (o === it.id ? null : it.id))}
+                      className={cx('mt-3 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition', open === it.id ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:text-zinc-100')}
+                    >
+                      <PlayCircle size={13} /> Ver técnica <ChevronDown size={12} className={cx('transition-transform', open === it.id && 'rotate-180')} />
+                    </button>
+                  )}
+                  <AnimatePresence initial={false}>
+                    {open === it.id && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                        <TechniquePanel name={ex.name} notes={it.notes} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <div className="flex shrink-0 flex-col gap-0.5 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
                   <IconBtn label="Editar" onClick={() => setEditing(it)}>

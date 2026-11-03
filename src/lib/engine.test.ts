@@ -268,3 +268,20 @@ describe('series rectas (Push / Pull / Pierna)', () => {
     expect(ensureRoutine(next).routine!.days[0].id).toBe(next.routine!.days[0].id)
   })
 })
+
+describe('animaciones de técnica', () => {
+  it('todos los ejercicios de la rutina tienen animación y sus poses son válidas', async () => {
+    const { motionFor, solve, sample } = await import('./motion')
+    const { routine, exercises } = buildDefaultRoutine()
+    for (const d of routine.days)
+      for (const it of d.items) {
+        const name = exercises.find((e) => e.id === it.exerciseId)!.name
+        const m = motionFor(name)
+        expect(m, name).not.toBeNull()
+        for (const t of [0, 0.7, 1.9, 3.3, 5.1]) {
+          const sk = solve(sample(m!, t).pose)
+          for (const p of Object.values(sk)) expect(p.every(Number.isFinite), name).toBe(true)
+        }
+      }
+  })
+})

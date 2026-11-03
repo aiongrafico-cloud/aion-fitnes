@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clock, Dumbbell, Flag, Info, Plus, Timer, Trash2, Trophy, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clock, Dumbbell, Flag, PlayCircle, Plus, Timer, Trash2, Trophy, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, EmptyState, Modal, Stepper, cx } from '../../components/ui'
 import { useConfirm } from '../../components/ui/confirm'
+import { TechniquePanel, hasTechnique } from '../../components/motion/TechniquePanel'
 import type { Tab } from '../../components/layout/Shell'
 import { useAthlete } from '../../store/AppStore'
 import { estimate1RM, roundToPlate } from '../../lib/oneRepMax'
@@ -496,16 +497,16 @@ function EntryCard({
         </button>
       </div>
 
-      {item?.notes && (
+      {hasTechnique(ex.name, item?.notes) && (
         <div className="mt-2">
           <button onClick={() => setShowNotes((v) => !v)} className="flex items-center gap-1 text-xs font-medium text-zinc-500 transition hover:text-zinc-200">
-            <Info size={12} /> Ejecución <ChevronDown size={12} className={cx('transition-transform', showNotes && 'rotate-180')} />
+            <PlayCircle size={12} /> Técnica <ChevronDown size={12} className={cx('transition-transform', showNotes && 'rotate-180')} />
           </button>
           <AnimatePresence initial={false}>
             {showNotes && (
-              <motion.p initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden pt-1.5 text-[13px] leading-relaxed text-zinc-400">
-                {item.notes}
-              </motion.p>
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <TechniquePanel name={ex.name} notes={item?.notes} />
+              </motion.div>
             )}
           </AnimatePresence>
         </div>
