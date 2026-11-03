@@ -7,7 +7,8 @@ import { buildDemoState } from './demo'
 import { addDays, programWeekOf } from './date'
 import { defaultState } from './storage'
 import type { Exercise, Profile, RoutineItem, Session } from './types'
-import { buildDefaultRoutine, nextDayIndex, progressionAlert, protocolFor, protocolForDate } from './routine'
+import { buildDefaultRoutine, LEGACY_ROUTINE, nextDayIndex, progressionAlert, protocolFor, protocolForDate, rpeForRir, setsFromProtocol } from './routine'
+import { ensureRoutine } from '../store/AppStore'
 
 const settings = defaultState.settings
 const profile: Profile = {
@@ -127,11 +128,13 @@ describe('analítica y demo', () => {
 
 describe('rutina Top Set + Back-off', () => {
   const item: RoutineItem = { id: 'i', exerciseId: 'b', top: [6, 8], backoff: [8, 10], restSeconds: 180, partials: true, notes: '' }
-  it('la rutina predeterminada tiene 4 días y 22 ejercicios sin calibrar', () => {
+  it('la rutina predeterminada es Push / Pull / Pierna A / Torso / Pierna B con series rectas', () => {
     const { routine, exercises } = buildDefaultRoutine()
-    expect(routine.days.map((d) => d.name)).toEqual(['Torso A', 'Pierna A', 'Torso B', 'Pierna B'])
-    expect(exercises.length).toBe(22)
+    expect(routine.days.map((d) => d.name)).toEqual(['Push', 'Pull', 'Pierna A', 'Torso', 'Pierna B'])
+    expect(exercises.length).toBe(29)
     expect(exercises.every((e) => e.calibrated === false)).toBe(true)
+    expect(routine.days.every((d) => d.items.every((i) => i.scheme === 'straight' && i.sets! >= 2))).toBe(true)
+    expect(routine.days.filter((d) => d.restAfter).map((d) => d.name)).toEqual(['Pierna A', 'Pierna B'])
   })
   it('Back-off un 12,5 % por debajo del Top Set, al fallo y con parciales', () => {
     const p = protocolFor(120, item, settings, false)
@@ -158,7 +161,7 @@ describe('rutina Top Set + Back-off', () => {
   it('la rotación sigue al último día entrenado', () => {
     const { routine } = buildDefaultRoutine()
     expect(nextDayIndex(routine, [])).toBe(0)
-    const s: Session = { id: 'x', date: '2026-01-06', createdAt: '2026-01-06', dayId: routine.days[3].id, entries: [] }
+    const s: Session = { id: 'x', date: '2026-01-06', createdAt: '2026-01-06', dayId: routine.days[4].id, entries: [] }
     expect(nextDayIndex(routine, [s])).toBe(0)
     expect(nextDayIndex(routine, [{ ...s, dayId: routine.days[1].id }])).toBe(2)
   })
@@ -214,5 +217,54 @@ describe('Mejoras: progresión, volumen y cuerpo', () => {
     const d = buildDemoState('2026-03-01')
     expect(d.body!.length).toBeGreaterThan(10)
     expect(d.profile!.bodyweight).toBe(d.body![d.body!.length - 1].weight)
+  })
+})
+
+describe('series rectas (Push / Pull / Pierna)', () => {
+  const st: RoutineItem = { id: 's', exerciseId: 'b', scheme: 'straight', sets: 3, rir: [1, 2], top: [6, 8], backoff: [6, 8], restSeconds: 165, partials: false, notes: '' }
+  const work = (date: string, weight: number, reps: number[], rpe = 8.5): Session => ({
+    id: date, date, createdAt: date, entries: [{ exerciseId: 'b', sets: reps.map((r, i) => ({ id: date + i, weight, reps: r, rpe, done: true, kind: 'work' as const })) }],
+  })
+
+  it('prescribe N series con el mismo peso al centro del rango y el RIR objetivo', () => {
+    expect(rpeForRir([1, 2])).toBe(8.5)
+    const p = protocolFor(120, st, settings, false)
+    expect(p.straight).toBe(true)
+    expect(p.workSets).toBe(3)
+    expect(p.top.target).toBe(7)
+    expect(estimate1RM(p.top.weight, 7, 8.5)).toBeCloseTo(120, -1)
+    const sets = setsFromProtocol(p)
+    expect(sets.filter((x) => x.kind === 'work').length).toBe(3)
+    expect(sets.filter((x) => x.kind === 'work').every((x) => x.weight === p.top.weight)).toBe(true)
+  })
+  it('en descarga: una serie menos a RIR 3', () => {
+    const p = protocolFor(120, st, settings, true)
+    expect(p.workSets).toBe(2)
+    expect(p.top.rpe).toBe(7)
+  })
+  it('solo sube cuando todas las series llegan al tope del rango', () => {
+    expect(progressionAlert(bench, st, [work('2026-01-06', 90, [8, 8, 7])], profile, settings)!.kind).toBe('enRango')
+    const up = progressionAlert(bench, st, [work('2026-01-06', 90, [8, 8, 8])], profile, settings)!
+    expect(up.kind).toBe('subir')
+    expect(up.to).toBe(92.5)
+    expect(protocolForDate(bench, st, profile, [work('2026-01-06', 90, [8, 8, 8])], settings, '2026-01-13').top.weight).toBeGreaterThanOrEqual(92.5)
+    expect(progressionAlert(bench, st, [work('2026-01-06', 90, [5, 5, 4])], profile, settings)!.kind).toBe('bajar')
+  })
+  it('migra la rutina Torso / Pierna anterior conservando historial y calibración', () => {
+    const legacy = buildDefaultRoutine([], 0, LEGACY_ROUTINE)
+    const incline = legacy.exercises.find((e) => e.name === 'Press inclinado en Multipower')!
+    const exercises = legacy.exercises.map((e) => (e.id === incline.id ? { ...e, calibrated: true, baseline: { weight: 70, reps: 7, rpe: 9.5 } } : e))
+    const old = { ...defaultState, profile: { ...profile, daysPerWeek: 4 }, exercises, routine: legacy.routine, sessions: [] }
+    const next = ensureRoutine(old)
+    expect(next.routine!.days.map((d) => d.name)).toEqual(['Push', 'Pull', 'Pierna A', 'Torso', 'Pierna B'])
+    expect(next.profile!.daysPerWeek).toBe(5)
+    const renamed = next.exercises.find((e) => e.id === incline.id)!
+    expect(renamed.name).toBe('Press inclinado en Multipower o mancuernas')
+    expect(renamed.calibrated).toBe(true)
+    expect(next.routine!.days[0].items[0].exerciseId).toBe(incline.id)
+    // Los ejercicios de la rutina anterior que ya no se usan quedan archivados, no borrados.
+    expect(next.exercises.find((e) => e.name === 'Aductores en máquina')!.archived).toBe(true)
+    // Idempotente: al volver a cargar no cambia nada.
+    expect(ensureRoutine(next).routine!.days[0].id).toBe(next.routine!.days[0].id)
   })
 })

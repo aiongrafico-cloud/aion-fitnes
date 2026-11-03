@@ -3,7 +3,7 @@ import { defaultState, loadState, saveState, uid } from '../lib/storage'
 import { todayISO } from '../lib/date'
 import { analyzeExercise, effectiveLoad, initialWorkingLoad, isWorkSet, suggestedIncrement, GOALS } from '../lib/program'
 import { estimate1RM, roundToPlate } from '../lib/oneRepMax'
-import { buildDefaultRoutine, DEFAULT_ROUTINE, PROTOCOL } from '../lib/routine'
+import { buildDefaultRoutine, DEFAULT_ROUTINE, LEGACY_ROUTINE, LEGACY_ROUTINE_NAME, PROTOCOL } from '../lib/routine'
 import { programWeekOf } from '../lib/date'
 import type { AppState, BodyEntry, Exercise, ExerciseLog, Profile, Routine, RoutineItem, Session, SetLog, Settings } from '../lib/types'
 
@@ -107,7 +107,7 @@ function reducer(state: AppState, action: Action): AppState {
           reps: action.set?.reps ?? last?.reps ?? 8,
           rpe: action.set?.rpe ?? last?.rpe,
           done: false,
-          kind: action.set?.kind ?? (last && last.kind !== 'warmup' ? 'normal' : undefined),
+          kind: action.set?.kind ?? (last?.kind === 'work' ? 'work' : last && last.kind !== 'warmup' ? 'normal' : undefined),
         }
         return { ...e, sets: [...e.sets, set] }
       })
@@ -162,11 +162,8 @@ function reducer(state: AppState, action: Action): AppState {
         ;[next[i], next[j]] = [next[j], next[i]]
         return next
       })
-    case 'resetRoutine': {
-      const week = state.profile ? Math.max(0, programWeekOf(state.profile.startDate, todayISO()) - 1) : 0
-      const built = buildDefaultRoutine(state.exercises, week)
-      return { ...state, exercises: [...state.exercises, ...built.exercises].map((e) => (built.routine.days.some((d) => d.items.some((i) => i.exerciseId === e.id)) ? { ...e, archived: false } : e)), routine: built.routine }
-    }
+    case 'resetRoutine':
+      return installDefaultRoutine(state, false)
     case 'saveBodyEntry': {
       // Un registro por día: guardar en una fecha existente la sustituye.
       const body = [...(state.body ?? []).filter((b) => b.date !== action.entry.date && b.id !== action.entry.id), action.entry]
@@ -224,16 +221,38 @@ function calibrateFrom(state: AppState, session: Session): Exercise[] {
 /** Datos anteriores a la rutina: se añade la rutina predeterminada sin tocar ejercicios ni sesiones existentes. */
 export function ensureRoutine(input: AppState): AppState {
   const state = migrate(input)
-  if (!state.profile || state.routine) return { ...state, routine: state.routine ?? null }
-  const week = Math.max(0, programWeekOf(state.profile.startDate, todayISO()) - 1)
+  if (!state.profile) return { ...state, routine: state.routine ?? null }
+  // Sin rutina, o con la rutina Torso / Pierna anterior: se instala la nueva Push / Pull / Pierna.
+  if (!state.routine) return installDefaultRoutine(state, false)
+  if (state.routine.name === LEGACY_ROUTINE_NAME) return installDefaultRoutine(state, true)
+  return state
+}
+
+/**
+ * Instala la rutina predeterminada reutilizando ejercicios (por nombre o nombre anterior, que se renombra)
+ * para conservar su historial y calibración. Con `archiveOld`, los ejercicios de la rutina anterior que ya
+ * no se usan se archivan (su historial se mantiene).
+ */
+function installDefaultRoutine(state: AppState, archiveOld: boolean): AppState {
+  const week = state.profile ? Math.max(0, programWeekOf(state.profile.startDate, todayISO()) - 1) : 0
   const built = buildDefaultRoutine(state.exercises, week)
-  return { ...state, exercises: [...state.exercises, ...built.exercises], routine: built.routine }
+  const inNew = new Set(built.routine.days.flatMap((d) => d.items.map((i) => i.exerciseId)))
+  const inOld = new Set((state.routine?.days ?? []).flatMap((d) => d.items.map((i) => i.exerciseId)))
+  const exercises = [...state.exercises, ...built.exercises].map((e) => {
+    const name = built.renames.get(e.id) ?? e.name
+    if (inNew.has(e.id)) return { ...e, name, archived: false }
+    if (archiveOld && inOld.has(e.id)) return { ...e, archived: true }
+    return e
+  })
+  const days = built.routine.days.length
+  const profile = state.profile && archiveOld ? { ...state.profile, daysPerWeek: Math.min(6, Math.max(2, days)) } : state.profile
+  return { ...state, profile, exercises, routine: built.routine }
 }
 
 /** Migraciones de datos guardados con versiones anteriores de la app. */
 function migrate(state: AppState): AppState {
   // Grupos musculares de pierna más finos para el volumen semanal.
-  const groupByName = new Map(DEFAULT_ROUTINE.flatMap((d) => d.items).map((t) => [t.name.toLowerCase(), t.group]))
+  const groupByName = new Map([...LEGACY_ROUTINE, ...DEFAULT_ROUTINE].flatMap((d) => d.items).map((t) => [t.name.toLowerCase(), t.group]))
   const exercises = state.exercises.map((e) => {
     const g = groupByName.get(e.name.toLowerCase())
     return e.muscleGroup === 'piernas' && g && g !== 'piernas' ? { ...e, muscleGroup: g } : e

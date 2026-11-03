@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { Badge, Card, EmptyState, SectionTitle, cx } from '../../components/ui'
 import { useAthlete } from '../../store/AppStore'
 import { analyzeExercise } from '../../lib/program'
-import { findRoutineItem, protocolFor } from '../../lib/routine'
+import { findRoutineItem, isStraight, protocolFor, rirLabel } from '../../lib/routine'
 import { todayISO } from '../../lib/date'
 import { kg, signedPct } from '../../lib/format'
 import { ResponseLine } from '../dashboard/Dashboard'
@@ -94,7 +94,7 @@ export function Progress({ focusId, onFocus }: { focusId: string | null; onFocus
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="text-left">
-                {(item ? ['Semana', 'Top Set', 'Back-off', '1RM meta', '1RM real', 'Estado'] : ['Semana', 'Prescripción', 'Carga', '1RM meta', '1RM real', 'Estado']).map((h) => (
+                {(item ? (isStraight(item) ? ['Semana', 'Series', 'RIR', '1RM meta', '1RM real', 'Estado'] : ['Semana', 'Top Set', 'Back-off', '1RM meta', '1RM real', 'Estado']) : ['Semana', 'Prescripción', 'Carga', '1RM meta', '1RM real', 'Estado']).map((h) => (
                   <th key={h} className="label border-b border-white/[0.05] pb-3 pr-3 font-medium">
                     {h}
                   </th>
@@ -122,7 +122,14 @@ export function Progress({ focusId, onFocus }: { focusId: string | null; onFocus
                         {isCurrent && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
                       </div>
                     </td>
-                    {proto ? (
+                    {proto?.straight ? (
+                      <>
+                        <td className="tnum py-3 pr-3 text-zinc-300">
+                          {proto.workSets} × <span className="font-semibold text-zinc-100">{kg(proto.top.weight)}</span> × {proto.top.reps[0]}–{proto.top.reps[1]}
+                        </td>
+                        <td className="tnum py-3 pr-3 text-zinc-400">{rirLabel(proto.rir ?? [1, 2])}</td>
+                      </>
+                    ) : proto ? (
                       <>
                         <td className="tnum py-3 pr-3 text-zinc-300">
                           <span className="font-semibold text-zinc-100">{kg(proto.top.weight)}</span> × {proto.top.reps[0]}–{proto.top.reps[1]}

@@ -2,6 +2,7 @@ import { estimate1RM } from './oneRepMax'
 import { daysBetween, programWeekOf } from './date'
 import { analyzeExercise, baselineE1RM, effectiveLoad, isWorkSet, type ExerciseAnalysis } from './program'
 import type { Exercise, Goal, MuscleGroup, Profile, Routine, Session, Settings } from './types'
+import { isStraight } from './routine'
 
 export interface SessionSummary {
   session: Session
@@ -187,7 +188,7 @@ export function weeklyMuscleVolume(exercises: Exercise[], sessions: Session[], p
     for (const d of routine.days) {
       for (const it of d.items) {
         const ex = exById.get(it.exerciseId)
-        if (ex) planned.set(ex.muscleGroup, (planned.get(ex.muscleGroup) ?? 0) + 2 * cycles)
+        if (ex) planned.set(ex.muscleGroup, (planned.get(ex.muscleGroup) ?? 0) + (isStraight(it) ? it.sets ?? 3 : 2) * cycles)
       }
     }
   }

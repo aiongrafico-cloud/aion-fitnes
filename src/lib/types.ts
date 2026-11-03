@@ -57,8 +57,8 @@ export interface Exercise {
   unilateral?: boolean
 }
 
-/** warmup = aproximación · top = Top Set · backoff = Back-off Set · normal = serie libre */
-export type SetKind = 'warmup' | 'top' | 'backoff' | 'normal'
+/** warmup = aproximación · top = Top Set · backoff = Back-off Set · work = serie recta · normal = serie libre */
+export type SetKind = 'warmup' | 'top' | 'backoff' | 'work' | 'normal'
 
 export interface SetLog {
   id: string
@@ -95,12 +95,18 @@ export interface RoutineItem {
   /** Rematar el Back-off con parciales en estiramiento [+LP]. */
   partials: boolean
   notes: string
+  /** topBackoff (por defecto) = Top Set + Back-off · straight = series rectas (sets × top a RIR rir). */
+  scheme?: 'topBackoff' | 'straight'
+  sets?: number
+  rir?: [number, number]
 }
 
 export interface RoutineDay {
   id: string
   name: string
   focus: string
+  /** Hay un día de descanso después de este. */
+  restAfter?: boolean
   items: RoutineItem[]
 }
 

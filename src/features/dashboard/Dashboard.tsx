@@ -159,7 +159,7 @@ export function Dashboard({ go }: { go: (t: Tab, exerciseId?: string) => void })
           {sel ? (
             <ProgressChart analysis={sel} height={260} compact />
           ) : (
-            <p className="py-16 text-center text-sm text-zinc-500">Registra tu primera sesión: cada ejercicio se calibra con su Top Set y aquí aparecerá su curva.</p>
+            <p className="py-16 text-center text-sm text-zinc-500">Registra tu primera sesión: cada ejercicio se calibra con su mejor serie y aquí aparecerá su curva.</p>
           )}
           <div className="mt-3">
             <ChartLegend />

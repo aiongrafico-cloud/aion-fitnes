@@ -6,7 +6,7 @@ import { Badge, Button, Field, Segmented, Stepper, cx } from '../../components/u
 import { Logo } from '../../components/layout/Shell'
 import { useStore } from '../../store/AppStore'
 import { MUSCLE_GROUPS } from '../../lib/catalog'
-import { buildDefaultRoutine, findRoutineItem, protocolFor, PROTOCOL } from '../../lib/routine'
+import { buildDefaultRoutine, findRoutineItem, isStraight, itemLabel, protocolFor, PROTOCOL, rpeForRir, rirLabel } from '../../lib/routine'
 import { estimate1RM } from '../../lib/oneRepMax'
 import { EXPERIENCE, GOALS, analyzeExercise, baselineE1RM, suggestedIncrement } from '../../lib/program'
 import { buildDemoState } from '../../lib/demo'
@@ -41,16 +41,16 @@ export function Onboarding() {
   const [bodyweight, setBodyweight] = useState(75)
   const [height, setHeight] = useState(175)
   const [experience, setExperience] = useState<Experience>('intermedio')
-  const [daysPerWeek, setDays] = useState(4)
+  const [daysPerWeek, setDays] = useState(5)
   const [programWeeks, setWeeks] = useState(12)
   const [goal, setGoal] = useState<Goal>('hipertrofia')
   const [lifts, setLifts] = useState<LiftDraft[]>([])
-  // Rutina predeterminada Torso/Pierna: sus ejercicios se calibran aquí (opcional) o en la primera sesión.
+  // Rutina predeterminada Push / Pull / Pierna: sus ejercicios se calibran aquí (opcional) o en la primera sesión.
   const [built] = useState(() => buildDefaultRoutine([]))
   const [calib, setCalib] = useState<Record<string, { on: boolean; weight: number; reps: number; rpe: number }>>(() => {
     const out: Record<string, { on: boolean; weight: number; reps: number; rpe: number }> = {}
     for (const d of built.routine.days)
-      for (const it of d.items) out[it.exerciseId] = { on: false, weight: built.samples.get(it.exerciseId) ?? 20, reps: it.top[1], rpe: PROTOCOL.topRpe }
+      for (const it of d.items) out[it.exerciseId] = { on: false, weight: built.samples.get(it.exerciseId) ?? 20, reps: it.top[1], rpe: isStraight(it) ? rpeForRir(it.rir ?? [1, 2]) : PROTOCOL.topRpe }
     return out
   })
   const [increments, setIncrements] = useState<Record<string, number>>({})
@@ -220,7 +220,7 @@ export function Onboarding() {
               <StepFrame
                 eyebrow="Medición de fuerza"
                 title="Tu línea base"
-                subtitle="Tu rutina Torso/Pierna ya está cargada. Si conoces tu Top Set reciente de algún ejercicio, actívalo e introduce peso, reps y RPE. El resto se calibra solo en tu primera sesión."
+                subtitle="Tu rutina Push / Pull / Pierna ya está cargada. Si conoces una serie reciente de algún ejercicio, actívalo e introduce peso, reps y RPE. El resto se calibra solo en tu primera sesión."
               >
                 <div className="space-y-6">
                   {built.routine.days.map((d, di) => (
@@ -250,8 +250,7 @@ export function Onboarding() {
                                 <div className="min-w-0 flex-1">
                                   <div className="truncate text-sm font-medium text-zinc-100">{ex.name}</div>
                                   <div className="text-xs text-zinc-500">
-                                    TS {it.top[0]}–{it.top[1]} · BS {it.backoff[0]}–{it.backoff[1]}
-                                    {it.partials ? ' · +LP' : ''}
+                                    {itemLabel(it)}
                                     {!c.on && ' · se calibra en la 1.ª sesión'}
                                   </div>
                                 </div>
@@ -525,14 +524,16 @@ function Summary({ profile, exercises, routine, onIncrement }: { profile: Profil
   const a = analyses[Math.min(sel, analyses.length - 1)]
   const data = a ? a.original.map((v, w) => ({ w, v: Math.round(v * 10) / 10 })) : []
   return (
-    <StepFrame eyebrow="Tu plan" title={`Listo, ${profile.name}.`} subtitle={`${routine.days.length} días · ${profile.programWeeks} semanas · ${EXPERIENCE[profile.experience].label} · Top Set + Back-off`}>
+    <StepFrame eyebrow="Tu plan" title={`Listo, ${profile.name}.`} subtitle={`${routine.days.length} días · ${profile.programWeeks} semanas · ${EXPERIENCE[profile.experience].label} · ${routine.days.some((d) => d.items.some(isStraight)) ? 'Series rectas + doble progresión' : 'Top Set + Back-off'}`}>
       <div className="grid gap-2 sm:grid-cols-2">
         {routine.days.map((d, i) => (
           <div key={d.id} className="glass !rounded-xl p-4">
             <div className="label !text-emerald-400/80">Día {i + 1}</div>
             <div className="mt-1 text-[15px] font-semibold text-zinc-50">{d.name}</div>
             <div className="text-xs text-zinc-500">{d.focus}</div>
-            <div className="mt-2 text-xs text-zinc-400">{d.items.length} ejercicios · {d.items.filter((x) => x.partials).length} con +LP</div>
+            <div className="mt-2 text-xs text-zinc-400">
+              {d.items.length} ejercicios · {d.items.reduce((a, x) => a + (isStraight(x) ? x.sets ?? 3 : 2), 0)} series{d.restAfter ? ' · después, descanso' : ''}
+            </div>
           </div>
         ))}
       </div>
@@ -585,7 +586,9 @@ function Summary({ profile, exercises, routine, onIncrement }: { profile: Profil
                   <div className="truncate text-sm font-semibold text-zinc-100">{x.exercise.name}</div>
                   <div className="text-xs text-zinc-500">
                     {proto
-                      ? `Semana 1: TS ${kg(proto.top.weight)} × ${proto.top.reps[0]}–${proto.top.reps[1]} · BS ${kg(proto.backoff?.weight ?? 0)}`
+                      ? proto.straight
+                        ? `Semana 1: ${proto.workSets} × ${proto.top.reps[0]}–${proto.top.reps[1]} con ${kg(proto.top.weight)} · RIR ${rirLabel(proto.rir ?? [1, 2])}`
+                        : `Semana 1: TS ${kg(proto.top.weight)} × ${proto.top.reps[0]}–${proto.top.reps[1]} · BS ${kg(proto.backoff?.weight ?? 0)}`
                       : `Semana 1: ${p1.sets} × ${p1.reps} @ ${kg(p1.weight)} · RPE ${p1.rpe}`}
                   </div>
                 </div>
@@ -595,7 +598,7 @@ function Summary({ profile, exercises, routine, onIncrement }: { profile: Profil
           })}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-zinc-400">En tu primera sesión de cada día registrarás un Top Set de referencia por ejercicio. Con él calculamos tu 1RM y la curva de progresión a {profile.programWeeks} semanas.</p>
+        <p className="mt-4 text-sm text-zinc-400">En tu primera sesión de cada día registrarás tus series de trabajo; la mejor de cada ejercicio será su referencia. Con él calculamos tu 1RM y la curva de progresión a {profile.programWeeks} semanas.</p>
       )}
     </StepFrame>
   )

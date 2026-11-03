@@ -25,7 +25,7 @@ const setSchema = z.object({
   reps: z.number().int().min(0),
   rpe: z.number().min(5).max(10).optional(),
   done: z.boolean(),
-  kind: z.enum(['warmup', 'top', 'backoff', 'normal']).optional(),
+  kind: z.enum(['warmup', 'top', 'backoff', 'work', 'normal']).optional(),
   partials: z.number().int().min(0).max(20).optional(),
 })
 
@@ -47,6 +47,7 @@ const routineSchema = z.object({
       id: z.string(),
       name: z.string(),
       focus: z.string(),
+      restAfter: z.boolean().optional(),
       items: z.array(
         z.object({
           id: z.string(),
@@ -56,6 +57,9 @@ const routineSchema = z.object({
           restSeconds: z.number().int().min(15).max(900),
           partials: z.boolean(),
           notes: z.string(),
+          scheme: z.enum(['topBackoff', 'straight']).optional(),
+          sets: z.number().int().min(1).max(10).optional(),
+          rir: z.tuple([z.number().min(0).max(5), z.number().min(0).max(5)]).optional(),
         }),
       ),
     }),

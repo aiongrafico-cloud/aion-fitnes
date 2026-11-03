@@ -8,7 +8,7 @@ import type { Tab } from '../../components/layout/Shell'
 import { useAthlete } from '../../store/AppStore'
 import { estimate1RM, roundToPlate } from '../../lib/oneRepMax'
 import { analyzeExercise, effectiveLoad, isWorkSet, todaysPrescription, type WeekPlan } from '../../lib/program'
-import { findRoutineItem, isCalibrated, nextDayIndex, progressionStep, protocolForDate, PROTOCOL, setsFromProtocol, warmupSets, type ProtocolPlan } from '../../lib/routine'
+import { findRoutineItem, isCalibrated, nextDayIndex, progressionStep, protocolForDate, PROTOCOL, rirLabel, setsFromProtocol, warmupSets, type ProtocolPlan } from '../../lib/routine'
 import { setTonnage, summarizeSessions } from '../../lib/analytics'
 import { formatLong, programWeekOf, todayISO } from '../../lib/date'
 import { muscleLabel } from '../../lib/catalog'
@@ -295,7 +295,7 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
                   <div className="text-xs text-zinc-500">{muscleLabel(ex.muscleGroup)}</div>
                 </div>
                 <div className="tnum text-right text-xs text-zinc-400">
-                  {p ? (p.calibrate ? 'Calibrar' : `TS ${kg(p.top.weight)}`) : q ? `${q.sets} × ${q.reps} @ ${ex.bodyweight ? `+${kg(q.weight)}` : kg(q.weight)}` : ''}
+                  {p ? (p.calibrate ? 'Calibrar' : p.straight ? `${p.workSets} × ${kg(p.top.weight)}` : `TS ${kg(p.top.weight)}`) : q ? `${q.sets} × ${q.reps} @ ${ex.bodyweight ? `+${kg(q.weight)}` : kg(q.weight)}` : ''}
                 </div>
               </motion.button>
             )
@@ -341,7 +341,15 @@ export function ProtocolRow({ ex, item, plan }: { ex: Exercise; item: RoutineIte
       </div>
       {plan.calibrate ? (
         <div className="mt-1 text-xs text-amber-300/90">
-          Calibrar: Top Set de {item.top[0]}–{item.top[1]} reps a RIR 1–0
+          {plan.straight ? `Calibrar: ${plan.workSets} × ${item.top[0]}–${item.top[1]} a RIR ${rirLabel(plan.rir ?? [1, 2])}` : `Calibrar: Top Set de ${item.top[0]}–${item.top[1]} reps a RIR 1–0`}
+        </div>
+      ) : plan.straight ? (
+        <div className="tnum mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-400">
+          <span>
+            {plan.workSets} × {item.top[0]}–{item.top[1]} <span className="font-semibold text-zinc-100">{kg(plan.top.weight)}</span>
+          </span>
+          <span className={plan.deload ? 'text-violet-300' : 'text-zinc-500'}>RIR {rirLabel(plan.rir ?? [1, 2])}</span>
+          <span className="text-zinc-500">{restLabel(item.restSeconds)}</span>
         </div>
       ) : (
         <div className="tnum mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-400">
@@ -398,10 +406,20 @@ function EntryCard({
   // Al cambiar el peso del Top Set, el Back-off (−12,5 %) y las aproximaciones pendientes se recalculan solos.
   const changeWeight = (s: SetLog, w: number) => {
     update(s.id, { weight: w })
-    if (s.kind !== 'top') return
+    if (s.kind === 'work') {
+      // Series rectas: al cambiar la primera serie, las pendientes siguientes toman el mismo peso.
+      const works = entry.sets.filter((x) => x.kind === 'work')
+      if (works[0]?.id === s.id) works.slice(1).filter((x) => !x.done).forEach((x) => update(x.id, { weight: w }))
+      if (works[0]?.id !== s.id) return
+    } else if (s.kind !== 'top') return
     const bo = entry.sets.find((x) => x.kind === 'backoff' && !x.done)
-    if (bo) update(bo.id, { weight: Math.max(0, roundToPlate(w * (1 - PROTOCOL.backoffDrop), rounding)) })
+    if (bo && s.kind === 'top') update(bo.id, { weight: Math.max(0, roundToPlate(w * (1 - PROTOCOL.backoffDrop), rounding)) })
     const pending = entry.sets.filter((x) => x.kind === 'warmup' && !x.done)
+    if (s.kind === 'work' && s.weight > 0) {
+      // Mantiene el % de cada aproximación respecto al peso de trabajo.
+      pending.forEach((x) => update(x.id, { weight: Math.max(0, roundToPlate((x.weight * w) / s.weight, rounding)) }))
+      return
+    }
     const ws = warmupSets(w, rounding)
     const offset = Math.max(0, ws.length - pending.length)
     pending.forEach((x, i) => {
@@ -420,7 +438,7 @@ function EntryCard({
     }
   }
 
-  const repsHint = (s: SetLog) => (s.kind === 'top' && item ? `${item.top[0]}–${item.top[1]}` : s.kind === 'backoff' && item ? `${item.backoff[0]}–${item.backoff[1]}` : null)
+  const repsHint = (s: SetLog) => ((s.kind === 'top' || s.kind === 'work') && item ? `${item.top[0]}–${item.top[1]}` : s.kind === 'backoff' && item ? `${item.backoff[0]}–${item.backoff[1]}` : null)
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} className="glass p-4 sm:p-5">
@@ -435,7 +453,22 @@ function EntryCard({
           <div className="tnum mt-1 text-xs text-zinc-500">
             {proto ? (
               proto.calibrate ? (
-                <span className="text-amber-300/90">Primera vez: elige el peso de tu Top Set ({item!.top[0]}–{item!.top[1]} reps, RIR 1–0). Será tu referencia.</span>
+                <span className="text-amber-300/90">
+                  {proto.straight
+                    ? `Primera vez: elige un peso para ${proto.workSets} × ${item!.top[0]}–${item!.top[1]} a RIR ${rirLabel(proto.rir ?? [1, 2])}. Tu mejor serie será la referencia.`
+                    : `Primera vez: elige el peso de tu Top Set (${item!.top[0]}–${item!.top[1]} reps, RIR 1–0). Será tu referencia.`}
+                </span>
+              ) : proto.straight ? (
+                <>
+                  {proto.workSets} × {item!.top[0]}–{item!.top[1]} con {kg(proto.top.weight)} @ RIR {rirLabel(proto.rir ?? [1, 2])}
+                  {` · descanso ${restLabel(item!.restSeconds)}`}
+                  {proto.adjust && (
+                    <span className={cx('mt-1 flex items-start gap-1', proto.adjust.kind === 'subir' ? 'text-emerald-300/90' : 'text-amber-300/90')}>
+                      {proto.adjust.kind === 'subir' ? <ArrowUp size={12} className="mt-px shrink-0" /> : <ArrowDown size={12} className="mt-px shrink-0" />}
+                      {proto.adjust.message}
+                    </span>
+                  )}
+                </>
               ) : (
                 <>
                   TS {kg(proto.top.weight)} × {item!.top[0]}–{item!.top[1]} @ RIR {proto.deload ? 3 : '1–0'}
@@ -508,7 +541,7 @@ function EntryCard({
           <AnimatePresence initial={false}>
             {entry.sets.map((s, i) => {
               const warm = s.kind === 'warmup'
-              const label = KIND_LABEL[s.kind ?? 'normal'] || String(i + 1)
+              const label = s.kind === 'work' ? String(entry.sets.filter((x) => x.kind === 'work').indexOf(s) + 1) : KIND_LABEL[s.kind ?? 'normal'] || String(i + 1)
               const hint = repsHint(s)
               return (
                 <motion.div key={s.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, height: 0 }}>
@@ -524,7 +557,7 @@ function EntryCard({
                       title={warm ? 'Aproximación (no cuenta para el 1RM) · pulsa para eliminar' : 'Eliminar serie'}
                       className={cx(
                         'tnum grid h-10 place-items-center text-[12px] font-bold transition',
-                        s.kind === 'top' ? 'text-emerald-400' : s.kind === 'backoff' ? 'text-violet-300' : s.done ? 'text-emerald-400' : 'text-zinc-500',
+                        s.kind === 'top' || s.kind === 'work' ? 'text-emerald-400' : s.kind === 'backoff' ? 'text-violet-300' : s.done ? 'text-emerald-400' : 'text-zinc-500',
                         'hover:text-rose-300',
                       )}
                     >
@@ -595,6 +628,26 @@ function EntryCard({
                         : `Por debajo del rango (${item.top[0]}–${item.top[1]}). La próxima sesión bajará la carga para volver al rango.`}
                     </motion.div>
                   )}
+                  {s.kind === 'work' && item && proto?.straight && !proto.deload && !proto.calibrate && (() => {
+                    const works = entry.sets.filter((x) => x.kind === 'work')
+                    if (works[works.length - 1]?.id !== s.id || !works.every((x) => x.done)) return null
+                    const atWeight = works.filter((x) => x.weight >= works[0].weight)
+                    const up = atWeight.length >= (item.sets ?? 3) && atWeight.every((x) => x.reps >= item.top[1])
+                    const down = works[0].reps < item.top[0]
+                    if (!up && !down) return null
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cx('mt-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs', up ? 'border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-200' : 'border-amber-500/20 bg-amber-500/[0.07] text-amber-200')}
+                      >
+                        {up ? <ArrowUp size={14} className="mt-px shrink-0" /> : <ArrowDown size={14} className="mt-px shrink-0" />}
+                        {up
+                          ? `Todas las series en el tope del rango (${item.top[0]}–${item.top[1]}). La próxima sesión sube a ${kg(works[0].weight + progressionStep(works[0].weight, rounding))}.`
+                          : `La primera serie quedó por debajo del rango (${item.top[0]}–${item.top[1]}). La próxima sesión bajará la carga.`}
+                      </motion.div>
+                    )
+                  })()}
                   {s.kind === 'backoff' && item?.partials && !proto?.deload && (
                     <div className="mt-4 flex items-center justify-end gap-2 pr-0.5 text-xs text-zinc-400">
                       <span>

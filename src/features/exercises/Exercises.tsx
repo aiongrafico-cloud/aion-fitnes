@@ -77,7 +77,7 @@ export function Exercises({ go }: { go: (t: Tab, exerciseId?: string) => void })
                         </IconBtn>
                       </div>
                     </div>
-                    <p className="mt-4 text-[13px] leading-relaxed text-zinc-500">Se calibra con el Top Set de tu primera sesión, o introduce ya una referencia con el lápiz.</p>
+                    <p className="mt-4 text-[13px] leading-relaxed text-zinc-500">Se calibra con la mejor serie de tu primera sesión, o introduce ya una referencia con el lápiz.</p>
                   </Card>
                 )
               }

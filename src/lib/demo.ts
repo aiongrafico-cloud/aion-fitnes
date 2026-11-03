@@ -1,12 +1,12 @@
 import { addDays, todayISO } from './date'
 import { clamp } from './oneRepMax'
 import { baselineE1RM, growthSchedule, suggestedIncrement } from './program'
-import { buildDefaultRoutine, protocolForDate, PROTOCOL } from './routine'
+import { buildDefaultRoutine, isStraight, protocolForDate, PROTOCOL, rpeForRir } from './routine'
 import { defaultState, uid } from './storage'
 import type { AppState, BodyEntry, Profile, Session, SetLog } from './types'
 
 /**
- * Atleta de ejemplo con ~5 semanas de la rutina Torso/Pierna (Top Set + Back-off).
+ * Atleta de ejemplo con ~5 semanas de la rutina Push / Pull / Pierna (series rectas con doble progresión).
  * Cada ejercicio tiene una "respuesta real" distinta y el atleta ejecuta lo que el motor le prescribe,
  * reportando las reps y el RPE que le corresponderían según su 1RM verdadero de ese día.
  */
@@ -20,7 +20,7 @@ export function buildDemoState(today = todayISO()): AppState {
     bodyweight: 78,
     height: 178,
     experience: 'intermedio',
-    daysPerWeek: 4,
+    daysPerWeek: 5,
     goal: 'hipertrofia',
     programWeeks: 12,
     startDate,
@@ -29,7 +29,7 @@ export function buildDemoState(today = todayISO()): AppState {
   const { routine, exercises: raw, samples } = buildDefaultRoutine([], 0)
   const exercises = raw.map((ex) => {
     const item = routine.days.flatMap((d) => d.items).find((i) => i.exerciseId === ex.id)!
-    const cal = { ...ex, calibrated: true, baseline: { weight: samples.get(ex.id) ?? 20, reps: item.top[1] - 1, rpe: PROTOCOL.topRpe }, createdAt: `${startDate}T09:00:00.000Z` }
+    const cal = { ...ex, calibrated: true, baseline: { weight: samples.get(ex.id) ?? 20, reps: item.top[1] - 1, rpe: isStraight(item) ? rpeForRir(item.rir ?? [1, 2]) : PROTOCOL.topRpe }, createdAt: `${startDate}T09:00:00.000Z` }
     cal.weeklyIncrement = suggestedIncrement(baselineE1RM(cal, profile, settings), profile, settings)
     return cal
   })
@@ -42,7 +42,7 @@ export function buildDemoState(today = todayISO()): AppState {
   }
   const response = new Map(exercises.map((e) => [e.id, 0.7 + rand() * 0.7]))
 
-  const dayOffsets = [0, 1, 3, 4]
+  const dayOffsets = [0, 1, 2, 4, 5]
   const sessions: Session[] = []
   let rot = 0
   for (let wk = 0; wk < 6; wk++) {
@@ -60,6 +60,17 @@ export function buildDemoState(today = todayISO()): AppState {
         const trueMax = baselineE1RM(ex, profile, settings) * Math.exp((response.get(ex.id) ?? 1) * S) * (1 + (rand() - 0.5) * 0.04)
         const toFailure = (load: number) => Math.max(1, 30 * (trueMax / Math.max(load, 0.5) - 1))
         const sets: SetLog[] = p.warmups.map((w) => ({ id: uid(), weight: w.weight, reps: w.reps, done: true, kind: 'warmup' }))
+        if (p.straight) {
+          // Cada serie cuesta ~1,5 reps de fatiga; el atleta deja el RIR objetivo (algo menos en la última).
+          const rir = p.rir ?? [1, 2]
+          for (let k = 0; k < p.workSets; k++) {
+            const rtfK = toFailure(p.top.weight) - 1.5 * k
+            const target = k === p.workSets - 1 ? rir[0] : (rir[0] + rir[1]) / 2
+            const reps = clamp(Math.floor(rtfK - target), 1, it.top[1] + 2)
+            sets.push({ id: uid(), weight: p.top.weight, reps, rpe: clamp(Math.round((10 - (rtfK - reps)) * 2) / 2, 6, 10), done: true, kind: 'work' })
+          }
+          return { exerciseId: ex.id, sets }
+        }
         const rtf = toFailure(p.top.weight)
         const rir = p.deload ? 3 : 0.5
         const topReps = clamp(Math.floor(rtf - rir), 1, it.top[1] + 3)

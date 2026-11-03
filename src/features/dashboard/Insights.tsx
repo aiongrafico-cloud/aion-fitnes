@@ -37,9 +37,9 @@ export function ProgressionAlerts({ go }: { go: (t: Tab, exerciseId?: string) =>
 
   return (
     <Card className="min-w-0" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
-      <SectionTitle title="Alertas de progresión" subtitle="Doble progresión del Top Set: al tocar el tope del rango, sube la carga" />
+      <SectionTitle title="Alertas de progresión" subtitle="Doble progresión: cuando llegas al tope del rango en todas las series, sube la carga" />
       {alerts.length === 0 ? (
-        <p className="py-6 text-center text-sm text-zinc-500">Registra tus Top Sets y aquí verás cuándo subir peso en cada ejercicio.</p>
+        <p className="py-6 text-center text-sm text-zinc-500">Registra tus series y aquí verás cuándo subir peso en cada ejercicio.</p>
       ) : (
         <div className="space-y-2">
           {visible.map((a) => (
