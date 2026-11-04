@@ -285,3 +285,18 @@ describe('animaciones de técnica', () => {
       }
   })
 })
+
+describe('fotos de técnica', () => {
+  it('todos los ejercicios de la rutina tienen fotos de inicio y final', async () => {
+    const { photoKeyFor } = await import('./photos')
+    const fs = await import('node:fs')
+    const { routine, exercises } = buildDefaultRoutine()
+    for (const d of routine.days)
+      for (const it of d.items) {
+        const name = exercises.find((e) => e.id === it.exerciseId)!.name
+        const k = photoKeyFor(name)
+        expect(k, name).not.toBeNull()
+        for (const i of [0, 1]) expect(fs.existsSync(`src/assets/exercises/${k}_${i}.webp`), `${name} ${k}`).toBe(true)
+      }
+  })
+})

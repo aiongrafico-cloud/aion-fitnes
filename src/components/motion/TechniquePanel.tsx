@@ -1,15 +1,21 @@
-import { Check } from 'lucide-react'
+import { Check, PlayCircle } from 'lucide-react'
 import { useMemo } from 'react'
 import { motionFor } from '../../lib/motion'
+import { photosFor, videoUrlFor } from '../../lib/photos'
 import { ExerciseAnimation } from './ExerciseAnimation'
+import { PhotoDemo } from './PhotoDemo'
 
-/** Animación de técnica + claves de ejecución de un ejercicio. */
+/** Demostración (fotos reales o, si no hay, figura animada) + claves de ejecución + vídeo. */
 export function TechniquePanel({ name, notes }: { name: string; notes?: string }) {
   const m = useMemo(() => motionFor(name), [name])
-  if (!m && !notes) return null
+  const photos = useMemo(() => photosFor(name), [name])
   return (
-    <div className="grid gap-3 pt-2 sm:grid-cols-[minmax(0,15rem)_1fr] sm:items-start">
-      {m && <ExerciseAnimation motion={m} className="mx-auto w-full max-w-[17rem] sm:max-w-none" />}
+    <div className="grid gap-3 pt-2 sm:grid-cols-[minmax(0,17rem)_1fr] sm:items-start">
+      {photos ? (
+        <PhotoDemo frames={photos} label={name} tempo={m?.tempo} phases={m?.phases} className="mx-auto w-full max-w-[22rem] sm:max-w-none" />
+      ) : (
+        m && <ExerciseAnimation motion={m} className="mx-auto w-full max-w-[17rem] sm:max-w-none" />
+      )}
       <div className="space-y-2">
         {m && (
           <ul className="space-y-1.5">
@@ -22,12 +28,21 @@ export function TechniquePanel({ name, notes }: { name: string; notes?: string }
           </ul>
         )}
         {notes && <p className="text-[13px] leading-relaxed text-zinc-400">{notes}</p>}
-        {m && <p className="text-[11px] text-zinc-600">Tempo: la barra inferior marca cada fase (verde = movimiento, violeta = pausa).</p>}
+        <a
+          href={videoUrlFor(name)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-rose-400/30 hover:text-rose-200"
+        >
+          <PlayCircle size={14} className="text-rose-400" /> Ver vídeo de la técnica
+        </a>
+        {photos && <p className="text-[10px] text-zinc-600">Fotos: Free Exercise DB (dominio público). La barra marca el tempo de cada fase.</p>}
       </div>
     </div>
   )
 }
 
-export function hasTechnique(name: string, notes?: string): boolean {
-  return !!notes || !!motionFor(name)
+/** Todos los ejercicios tienen al menos el enlace al vídeo. */
+export function hasTechnique(): boolean {
+  return true
 }

@@ -527,7 +527,7 @@ export function motionFor(name: string): Motion | null {
   if (has('fondos', 'press cerrado')) return MOTIONS['fondos']
   if (has('pec deck', 'contractor')) return MOTIONS['pec-deck']
   if (has('cruce', 'aperturas')) return MOTIONS['cruces']
-  if (has('lateral')) return MOTIONS['laterales']
+  if (has('elevaciones laterales', 'elevacion lateral')) return MOTIONS['laterales']
   if (has('pajaro', 'face pull', 'posterior')) return MOTIONS['face-pull']
   if (has('sobre la cabeza', 'frances', 'copa')) return MOTIONS['triceps-cabeza']
   if (has('pushdown', 'triceps en polea', 'extension de triceps')) return MOTIONS['pushdown']

@@ -497,7 +497,7 @@ function EntryCard({
         </button>
       </div>
 
-      {hasTechnique(ex.name, item?.notes) && (
+      {hasTechnique() && (
         <div className="mt-2">
           <button onClick={() => setShowNotes((v) => !v)} className="flex items-center gap-1 text-xs font-medium text-zinc-500 transition hover:text-zinc-200">
             <PlayCircle size={12} /> Técnica <ChevronDown size={12} className={cx('transition-transform', showNotes && 'rotate-180')} />

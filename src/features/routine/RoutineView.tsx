@@ -181,7 +181,7 @@ export function RoutineView({ go, onTrainDay }: { go: (t: Tab) => void; onTrainD
                     </div>
                   </div>
                   )}
-                  {hasTechnique(ex.name, it.notes) && (
+                  {hasTechnique() && (
                     <button
                       onClick={() => setOpen((o) => (o === it.id ? null : it.id))}
                       className={cx('mt-3 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition', open === it.id ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:text-zinc-100')}
