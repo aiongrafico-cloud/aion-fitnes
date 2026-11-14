@@ -5,7 +5,7 @@ import { analyzeExercise, effectiveLoad, initialWorkingLoad, isWorkSet, suggeste
 import { estimate1RM, roundToPlate } from '../lib/oneRepMax'
 import { buildDefaultRoutine, DEFAULT_ROUTINE, LEGACY_ROUTINE, LEGACY_ROUTINE_NAME, PROTOCOL } from '../lib/routine'
 import { programWeekOf } from '../lib/date'
-import type { AppState, BodyEntry, Exercise, ExerciseLog, Profile, Routine, RoutineItem, Session, SetLog, Settings } from '../lib/types'
+import type { AppState, BodyEntry, Checkin, Exercise, ExerciseLog, Profile, Routine, RoutineItem, Session, SetLog, Settings } from '../lib/types'
 
 type Action =
   | { type: 'completeOnboarding'; profile: Profile; exercises: Exercise[]; routine: Routine | null }
@@ -14,7 +14,7 @@ type Action =
   | { type: 'addExercise'; exercise: Exercise }
   | { type: 'updateExercise'; id: string; patch: Partial<Exercise> }
   | { type: 'deleteExercise'; id: string }
-  | { type: 'startDraft'; date?: string; dayId?: string; entries?: { exerciseId: string; sets: Omit<SetLog, 'id'>[] }[] }
+  | { type: 'startDraft'; date?: string; dayId?: string; entries?: { exerciseId: string; sets: Omit<SetLog, 'id'>[] }[]; checkin?: Checkin }
   | { type: 'setDraftDate'; date: string }
   | { type: 'setDraftNotes'; notes: string }
   | { type: 'addDraftExercise'; exerciseId: string; sets: Omit<SetLog, 'id'>[] }
@@ -81,6 +81,7 @@ function reducer(state: AppState, action: Action): AppState {
           id: uid(),
           date: action.date ?? todayISO(),
           dayId: action.dayId,
+          checkin: action.checkin,
           entries: (action.entries ?? []).map((e) => ({ exerciseId: e.exerciseId, sets: e.sets.map((st) => ({ ...st, id: uid() })) })),
           createdAt: new Date().toISOString(),
         },

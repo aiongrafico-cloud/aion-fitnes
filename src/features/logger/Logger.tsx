@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clock, Dumbbell, Flag, PlayCircle, Plus, Timer, Trash2, Trophy, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clock, Dumbbell, Flag, Headphones, PlayCircle, Plus, Timer, Trash2, Trophy, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, EmptyState, Modal, Stepper, cx } from '../../components/ui'
 import { useConfirm } from '../../components/ui/confirm'
@@ -14,7 +14,10 @@ import { setTonnage, summarizeSessions } from '../../lib/analytics'
 import { formatLong, programWeekOf, todayISO } from '../../lib/date'
 import { muscleLabel } from '../../lib/catalog'
 import { kg, restLabel, tonnage } from '../../lib/format'
-import type { Exercise, ExerciseLog, Formula, RoutineItem, SetLog } from '../../lib/types'
+import type { Checkin, Exercise, ExerciseLog, Formula, RoutineItem, SetLog } from '../../lib/types'
+import { applyReadiness, readinessFor } from '../../lib/readiness'
+import { GuidedSession } from './GuidedSession'
+import { CheckinModal } from './CheckinModal'
 
 const RPE_OPTIONS = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
 
@@ -36,6 +39,8 @@ function fireConfetti(big = false) {
 export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => void; initialDayId?: string | null; onConsumeDay?: () => void }) {
   const { profile, exercises, sessions, settings, draft, routine, dispatch } = useAthlete()
   const [picker, setPicker] = useState(false)
+  const [checkinFor, setCheckinFor] = useState<number | null>(null)
+  const [guided, setGuided] = useState(false)
   const ask = useConfirm()
   const [restEnd, setRestEnd] = useState<number | null>(null)
   const [result, setResult] = useState<null | { tonnage: number; sets: number; prs: { name: string; e1rm: number; previous: number }[]; calibrated: string[] }>(null)
@@ -50,7 +55,7 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
   useEffect(() => {
     if (!initialDayId) return
     const i = routine?.days.findIndex((d) => d.id === initialDayId) ?? -1
-    if (i >= 0 && !draft) startDay(i)
+    if (i >= 0 && !draft) setCheckinFor(i)
     onConsumeDay?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDayId])
@@ -62,17 +67,19 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
     return m
   }, [exercises, profile, sessions, settings])
 
-  const startDay = (i: number) => {
+  const startDay = (i: number, checkin?: Checkin) => {
     const day = routine?.days[i]
     if (!day) return
+    const r = checkin ? readinessFor(checkin) : null
     const entries = day.items
       .map((it) => {
         const ex = exercises.find((e) => e.id === it.exerciseId)
         if (!ex) return null
-        return { exerciseId: ex.id, sets: setsFromProtocol(protocolForDate(ex, it, profile, sessions, settings, today)) }
+        const sets = setsFromProtocol(protocolForDate(ex, it, profile, sessions, settings, today))
+        return { exerciseId: ex.id, sets: r ? applyReadiness(sets, r, settings.rounding) : sets }
       })
       .filter((x): x is NonNullable<typeof x> => x != null)
-    dispatch({ type: 'startDraft', dayId: day.id, entries })
+    dispatch({ type: 'startDraft', dayId: day.id, entries, checkin })
   }
 
   const addExercise = (ex: Exercise) => {
@@ -148,7 +155,7 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
                   <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-50">{day.name}</h2>
                   <p className="mt-0.5 text-sm text-zinc-400">{day.focus}</p>
                 </div>
-                <Button size="lg" onClick={() => startDay(dayIdx)} disabled={day.items.length === 0}>
+                <Button size="lg" onClick={() => setCheckinFor(dayIdx)} disabled={day.items.length === 0}>
                   <Plus size={16} /> Empezar {day.name}
                 </Button>
               </div>
@@ -173,6 +180,18 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
           </Button>
         </div>
         <AnimatePresence>{result && <ResultModal result={result} onClose={() => setResult(null)} onPanel={() => { setResult(null); go('panel') }} />}</AnimatePresence>
+        {checkinFor != null && routine?.days[checkinFor] && (
+          <CheckinModal
+            open
+            dayName={routine.days[checkinFor].name}
+            onClose={() => setCheckinFor(null)}
+            onStart={(c, g) => {
+              startDay(checkinFor, c)
+              setCheckinFor(null)
+              setGuided(g)
+            }}
+          />
+        )}
       </div>
     )
   }
@@ -221,6 +240,29 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
           </div>
         </div>
       </div>
+
+      {draft.entries.length > 0 && (
+        <button
+          onClick={() => setGuided(true)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.08] px-4 py-3 text-left transition hover:bg-emerald-500/[0.12]"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500 text-ink-950">
+            <Headphones size={19} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-emerald-100">Modo guiado con voz</span>
+            <span className="block text-xs text-emerald-200/70">Te dice cada serie, cuenta el descanso y te avisa cuándo subir peso.</span>
+          </span>
+        </button>
+      )}
+      {draft.checkin && (() => {
+        const r = readinessFor(draft.checkin)
+        return (
+          <div className={cx('rounded-xl border px-4 py-2.5 text-sm', r.factor < 1 ? 'border-amber-500/25 bg-amber-500/[0.07] text-amber-200' : 'border-white/[0.06] bg-white/[0.02] text-zinc-300')}>
+            <span className="font-semibold">{r.title}.</span> {r.message}
+          </div>
+        )
+      })()}
 
       <AnimatePresence initial={false}>
         {draft.entries.map((entry) => {
@@ -304,6 +346,7 @@ export function Logger({ go, initialDayId, onConsumeDay }: { go: (t: Tab) => voi
         </div>
       </Modal>
 
+      <AnimatePresence>{guided && <GuidedSession onClose={() => setGuided(false)} onFinish={finish} />}</AnimatePresence>
       <RestTimer end={restEnd} onDone={() => setRestEnd(null)} onAdd={(s) => setRestEnd((e) => (e ?? Date.now()) + s * 1000)} />
       <AnimatePresence>{result && <ResultModal result={result} onClose={() => setResult(null)} onPanel={() => go('panel')} />}</AnimatePresence>
     </div>

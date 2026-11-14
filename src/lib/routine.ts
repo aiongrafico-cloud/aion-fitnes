@@ -1,3 +1,4 @@
+import { isReducedSession } from './readiness'
 import { clamp, estimate1RM, roundToPlate, weightForReps } from './oneRepMax'
 import { programWeekOf, todayISO } from './date'
 import { analyzeExercise, effectiveLoad, totalWeeksFor } from './program'
@@ -417,7 +418,8 @@ export function topSetHistory(ex: Exercise, sessions: Session[], profile: Profil
     const e1rm = Math.max(...work.map((w) => estimate1RM(effectiveLoad(ex, w.weight, profile.bodyweight), w.reps, w.rpe, settings.formula)))
     // En series rectas solo cuentan las series hechas con el peso de la primera.
     const allReps = straight ? work.filter((w) => w.weight >= top.weight).map((w) => w.reps) : [top.reps]
-    out.push({ date: s.date, weight: top.weight, reps: top.reps, rpe: top.rpe, e1rm, deload: top.rpe != null && top.rpe <= 7.5, allReps })
+    // Las sesiones rebajadas por el check-in no deciden subidas ni bajadas.
+    out.push({ date: s.date, weight: top.weight, reps: top.reps, rpe: top.rpe, e1rm, deload: (top.rpe != null && top.rpe <= 7.5) || isReducedSession(s.checkin), allReps })
   }
   return out
 }

@@ -300,3 +300,50 @@ describe('fotos de técnica', () => {
       }
   })
 })
+
+describe('entrenador: check-in y revisión semanal', () => {
+  it('el check-in ajusta la carga según cómo llegas', async () => {
+    const { readinessFor, applyReadiness } = await import('./readiness')
+    expect(readinessFor({ sleep: 3, energy: 3, soreness: 3, pain: false }).factor).toBe(1)
+    const low = readinessFor({ sleep: 1, energy: 1, soreness: 2, pain: false })
+    expect(low.factor).toBe(0.9)
+    expect(low.dropSet).toBe(true)
+    const sets = [
+      { weight: 50, reps: 8, done: false, kind: 'warmup' as const },
+      { weight: 100, reps: 8, done: false, kind: 'work' as const },
+      { weight: 100, reps: 8, done: false, kind: 'work' as const },
+      { weight: 100, reps: 8, done: false, kind: 'work' as const },
+    ]
+    const out = applyReadiness(sets, low, 2.5)
+    expect(out.filter((s) => s.kind === 'work')).toHaveLength(2)
+    expect(out[1].weight).toBe(90)
+    expect(readinessFor({ sleep: 3, energy: 3, soreness: 3, pain: true }).factor).toBe(0.9)
+  })
+
+  it('las sesiones rebajadas no cuentan para subir o bajar peso', async () => {
+    const state = buildDemoState('2026-03-20')
+    const ex = state.exercises.find((e) => !e.archived && e.calibrated !== false)!
+    const item = state.routine!.days.flatMap((d) => d.items).find((i) => i.exerciseId === ex.id)!
+    const before = progressionAlert(ex, item, state.sessions, state.profile!, state.settings)
+    const reduced: Session = {
+      id: 'r1',
+      date: '2026-03-21',
+      createdAt: '2026-03-21T10:00:00Z',
+      checkin: { sleep: 1, energy: 1, soreness: 1, pain: false },
+      entries: [{ exerciseId: ex.id, sets: [{ id: 'x', weight: 1, reps: 1, rpe: 9, done: true, kind: item.scheme === 'straight' ? 'work' : 'top' }] }],
+    }
+    const after = progressionAlert(ex, item, [...state.sessions, reduced], state.profile!, state.settings)
+    expect(after?.last.date).toBe(before?.last.date)
+  })
+
+  it('la revisión semanal resume asistencia y da recomendaciones', async () => {
+    const { weeklyReview } = await import('./coach')
+    const state = buildDemoState('2026-03-20')
+    const r = weeklyReview({ ...state, profile: state.profile! }, '2026-03-20', programWeekOf(state.profile!.startDate, '2026-03-20'))
+    expect(r.sessions).toBeGreaterThan(0)
+    expect(r.points.length).toBeGreaterThan(0)
+    expect(r.next.length).toBeGreaterThan(0)
+    expect(r.score).toBeGreaterThanOrEqual(0)
+    expect(r.score).toBeLessThanOrEqual(100)
+  })
+})

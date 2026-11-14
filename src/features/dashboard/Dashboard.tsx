@@ -13,6 +13,7 @@ import { ChartLegend, ProgressChart } from '../progress/ProgressChart'
 import { nextDayIndex, protocolForDate } from '../../lib/routine'
 import { ProtocolRow } from '../logger/Logger'
 import { MuscleVolumeCard, ProgressionAlerts } from './Insights'
+import { CoachReview } from './CoachReview'
 
 function greeting() {
   const h = new Date().getHours()
@@ -212,6 +213,8 @@ export function Dashboard({ go }: { go: (t: Tab, exerciseId?: string) => void })
           )}
         </Card>
       </div>
+
+      <CoachReview week={kpis.currentWeek} />
 
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
         {routine && <ProgressionAlerts go={go} />}

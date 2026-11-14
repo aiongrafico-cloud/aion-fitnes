@@ -36,6 +36,14 @@ const sessionSchema = z.object({
   notes: z.string().optional(),
   createdAt: z.string(),
   dayId: z.string().optional(),
+  checkin: z
+    .object({
+      sleep: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      energy: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      soreness: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      pain: z.boolean(),
+    })
+    .optional(),
 })
 
 const range = z.tuple([z.number().int().min(1), z.number().int().min(1)])

@@ -76,6 +76,15 @@ export interface ExerciseLog {
   sets: SetLog[]
 }
 
+/** Check-in previo: 1 = mal · 2 = regular · 3 = bien (en agujetas, 3 = sin agujetas). */
+export interface Checkin {
+  sleep: 1 | 2 | 3
+  energy: 1 | 2 | 3
+  soreness: 1 | 2 | 3
+  /** Dolor articular o molestia que no es agujeta. */
+  pain: boolean
+}
+
 export interface Session {
   id: string
   date: string // YYYY-MM-DD
@@ -84,6 +93,8 @@ export interface Session {
   createdAt: string
   /** Día de rutina entrenado (si la sesión sigue la rutina). */
   dayId?: string
+  /** Cómo llegaba el atleta (ajusta la carga del día). */
+  checkin?: Checkin
 }
 
 export interface RoutineItem {
